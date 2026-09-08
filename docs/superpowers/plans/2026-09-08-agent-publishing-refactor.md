@@ -10,7 +10,7 @@
 
 **Spec:** [体验与接口设计](../specs/2026-09-08-agent-publishing-design.md)。
 
-**Status:** 制定完成，未实施。此版本取代此前要求修改 CLI 的计划；不再执行 stdin、review-bundle、新发布命令或 CLI 分支开发。
+**Status:** 正在当前任务实施；已完成基础官方接力、正式预览回环和离线最终确认。详细证据见 docs/verification/experience-matrix.md；完整体验及跨宿主验收仍未完成。此版本取代此前要求修改 CLI 的计划；不再执行 stdin、review-bundle、新发布命令或 CLI 分支开发。
 
 ## Global Constraints
 

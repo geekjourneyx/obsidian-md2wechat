@@ -1,13 +1,8 @@
-// settings.ts
-
 export interface Md2WechatSettings {
-  apiKey: string;
-  theme: string;
-  fontSize: 'small' | 'medium' | 'large';
+	cliPath: string;
+	lastAccount: string;
 }
-
 export const DEFAULT_SETTINGS: Md2WechatSettings = {
-  apiKey: '',
-  theme: 'default',
-  fontSize: 'medium',
+	cliPath: "",
+	lastAccount: "",
 };

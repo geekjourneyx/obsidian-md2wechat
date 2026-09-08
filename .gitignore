@@ -25,3 +25,6 @@ CLAUDE.md
 
 *.zip
 .worktrees/
+artifacts/
+
+!tests/fixtures/native-bridge/main.js

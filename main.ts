@@ -1,225 +1,318 @@
-// main.ts
-
-import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, requestUrl } from 'obsidian';
-import { Md2WechatSettings, DEFAULT_SETTINGS } from './settings';
-import { Md2WechatView, MD2WECHAT_VIEW_TYPE } from './view';
-
+import {
+	MarkdownView,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	FileSystemAdapter,
+} from "obsidian";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { readFile } from "node:fs/promises";
+import { DEFAULT_SETTINGS, type Md2WechatSettings } from "./settings";
+import { Md2WechatView, MD2WECHAT_VIEW_TYPE } from "./view";
+import {
+	createResultStore,
+	hash,
+	type ResultStore,
+	type ResultFiles,
+} from "./src/results/result-store";
+import { downloadImage } from "./src/source/remote-image";
+import { resolveAssets } from "./src/source/resolve-assets";
+import { createCliRunner, CliProcessRegistry } from "./src/cli/runner";
+import { CatalogService, locateCli } from "./src/cli/catalog-service";
+import { renderPreview } from "./src/cli/preview-service";
 export default class Md2WechatPlugin extends Plugin {
-  settings: Md2WechatSettings;
-
-  async onload() {
-    console.log('正在加载公众号排版助手插件...');
-
-    await this.loadSettings();
-
-    // 注册自定义视图
-    this.registerView(
-      MD2WECHAT_VIEW_TYPE,
-      (leaf) => new Md2WechatView(leaf, this)
-    );
-
-    // 添加功能区图标按钮
-    this.addRibbonIcon('newspaper', '排版到公众号', async (evt: MouseEvent) => {
-      new Notice('正在进行排版...');
-      await this.convertToWechatHTML();
-    });
-
-    // 添加命令
-    this.addCommand({
-      id: 'convert-to-wechat-html',
-      name: '一键排版到公众号样式',
-      editorCallback: async (editor: Editor, view: MarkdownView) => {
-        new Notice('正在进行排版...');
-        await this.convertToWechatHTML();
-      },
-    });
-
-    // 添加设置页面
-    this.addSettingTab(new Md2WechatSettingTab(this.app, this));
-  }
-
-  onunload() {
-    // 插件卸载时的清理工作
-    // 不在此处手动分离视图叶子，让 Obsidian 自动处理
-  }
-
-  async loadSettings() {
-    const loadedData = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
-    
-    // 设置已加载
-  }
-
-  async saveSettings() {
-    await this.saveData(this.settings);
-  }
-
-  // 核心功能：调用 API 并渲染
-  async convertToWechatHTML() {
-    if (!this.settings.apiKey) {
-      new Notice('错误：请先在设置中填写 API Key！');
-      return;
-    }
-
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView) {
-      new Notice('请先打开一个 Markdown 文件！');
-      return;
-    }
-
-    const markdownContent = activeView.editor.getValue();
-    if (!markdownContent.trim()) {
-      new Notice('当前文件没有内容！');
-      return;
-    }
-
-    try {
-      // 准备请求数据
-      const requestData = {
-        markdown: markdownContent,
-        theme: this.settings.theme,
-        fontSize: this.settings.fontSize,
-      };
-
-      // 发送 API 请求
-
-      const response = await requestUrl({
-        url: 'https://www.md2wechat.cn/api/convert',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': this.settings.apiKey,
-        },
-        body: JSON.stringify(requestData),
-      });
-
-      // 检查响应状态
-      if (response.status >= 400) {
-        let errorMessage = `HTTP 请求失败 - 状态码: ${response.status}`;
-        
-        // 尝试解析错误响应
-        try {
-          const errorData = response.json;
-          if (errorData && errorData.msg) {
-            errorMessage += `\n错误信息: ${errorData.msg}`;
-          }
-          if (errorData && errorData.code) {
-            errorMessage += `\n错误码: ${errorData.code}`;
-          }
-        } catch (parseError) {
-          // 错误响应解析失败
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      // 获取解析后的 JSON 响应
-      const result = response.json;
-
-      // 检查 API 响应格式和状态
-      if (typeof result !== 'object' || result === null) {
-        throw new Error('API 响应不是有效的对象格式');
-      }
-
-      if (result.code === 0) {
-        if (result.data && result.data.html) {
-          // 转换成功
-          this.showResultInView(result.data.html, markdownContent);
-          new Notice('排版成功！');
-        } else {
-          console.error('成功响应但缺少 HTML 数据:', result);
-          throw new Error('API 返回成功但未包含 HTML 数据');
-        }
-      } else {
-        const errorMsg = result.msg || '未知错误';
-        const errorCode = result.code || '无错误码';
-        console.error('API 业务错误:', { code: errorCode, msg: errorMsg, fullResponse: result });
-        throw new Error(`API 错误 (${errorCode}): ${errorMsg}`);
-      }
-
-    } catch (error) {
-      console.error('完整错误信息:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      });
-      
-      // 根据错误类型提供更有用的提示
-      let userMessage = '排版失败: ';
-      if (error.message.includes('Failed to fetch') || error.message.includes('Network Error')) {
-        userMessage += '网络连接失败，请检查网络连接';
-      } else if (error.message.includes('401')) {
-        userMessage += 'API Key 无效或已过期，请检查设置';
-      } else if (error.message.includes('403')) {
-        userMessage += '访问被拒绝，请检查 API Key 权限';
-      } else if (error.message.includes('429')) {
-        userMessage += 'API 调用频率过高，请稍后重试';
-      } else if (error.message.includes('500')) {
-        userMessage += '服务器内部错误，请稍后重试';
-      } else {
-        userMessage += error.message;
-      }
-      
-      new Notice(userMessage);
-    }
-  }
-
-  // 在新视图中显示结果
-  async showResultInView(html: string, markdownContent?: string) {
-    // 先分离已存在的同类型叶子
-    this.app.workspace.detachLeavesOfType(MD2WECHAT_VIEW_TYPE);
-
-    // 在右侧打开一个新的叶子
-    const newLeaf = this.app.workspace.getRightLeaf(false);
-    if (newLeaf) {
-        await newLeaf.setViewState({
-            type: MD2WECHAT_VIEW_TYPE,
-            active: true,
-        });
-
-        // 激活叶子并获取视图实例来更新内容
-        this.app.workspace.revealLeaf(newLeaf);
-        const view = newLeaf.view as Md2WechatView;
-        if (view instanceof Md2WechatView) {
-            view.updateSettingsControls();
-            view.setContent(html, markdownContent);
-        }
-    }
-  }
+	settings: Md2WechatSettings = DEFAULT_SETTINGS;
+	store!: ResultStore;
+	root = "";
+	private legacy: Record<string, unknown> = {};
+	private recent: MarkdownView | null = null;
+	private processes = new CliProcessRegistry();
+	async onload() {
+		this.legacy = (await this.loadData()) ?? {};
+		this.settings = { ...DEFAULT_SETTINGS, ...this.legacy };
+		const vault = this.app.vault.adapter;
+		if (!(vault instanceof FileSystemAdapter))
+			throw new Error("公众号排版目前需要桌面端本地笔记库");
+		const data =
+			process.platform === "darwin"
+				? join(homedir(), "Library", "Application Support")
+				: process.platform === "win32"
+					? (process.env.LOCALAPPDATA ?? homedir())
+					: (process.env.XDG_DATA_HOME ??
+						join(homedir(), ".local", "share"));
+		this.root = join(
+			data,
+			"md2wechat",
+			"obsidian-results",
+			hash(vault.getBasePath()).slice(0, 24),
+		);
+		this.store = createResultStore(this.root);
+		this.registerView(
+			MD2WECHAT_VIEW_TYPE,
+			(leaf) => new Md2WechatView(leaf, this),
+		);
+		this.addRibbonIcon(
+			"newspaper",
+			"公众号排版",
+			() => void this.openPreview(),
+		);
+		this.addCommand({
+			id: "convert-to-wechat-html",
+			name: "打开公众号排版",
+			callback: () => void this.openPreview(),
+		});
+		this.addCommand({
+			id: "open-publishing-preview",
+			name: "查看排版结果",
+			callback: () => void this.openPreview(),
+		});
+		this.registerCliHandler(
+			"md2wechat-publisher:capture",
+			"获取当前文章的排版副本",
+			{
+				source: {
+					value: "<vault-relative-path>",
+					description: "明确指定文章路径",
+				},
+			},
+			async (params) => JSON.stringify(await this.capture(params.source)),
+		);
+		this.registerCliHandler(
+			"md2wechat-publisher:present",
+			"展示本次排版结果",
+			{
+				request: {
+					value: "<id>",
+					description: "捕获请求",
+					required: true,
+				},
+				markdown: {
+					value: "<path>",
+					description: "排版正文",
+					required: true,
+				},
+				preview: {
+					value: "<path>",
+					description: "预览 HTML",
+					required: true,
+				},
+				response: {
+					value: "<path>",
+					description: "md2wechat preview 返回文件",
+					required: true,
+				},
+			},
+			async (params) =>
+				JSON.stringify(
+					await this.present(params.request, {
+						markdown: params.markdown,
+						preview: params.preview,
+						response: params.response,
+					}),
+				),
+		);
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", (leaf) => {
+				if (leaf?.view instanceof MarkdownView) {
+					this.recent = leaf.view;
+					for (const item of this.app.workspace.getLeavesOfType(
+						MD2WECHAT_VIEW_TYPE,
+					))
+						if (item.view instanceof Md2WechatView)
+							item.view.sourcePath = leaf.view.file?.path ?? "";
+				}
+				this.refresh();
+			}),
+		);
+		this.registerEvent(
+			this.app.workspace.on("editor-change", () => this.refresh()),
+		);
+		this.registerEvent(this.app.vault.on("delete", () => this.refresh()));
+		this.registerEvent(
+			this.app.vault.on("rename", (file, old) => {
+				void this.store
+					.renameSource(old, file.path)
+					.then(() => {
+						for (const leaf of this.app.workspace.getLeavesOfType(
+							MD2WECHAT_VIEW_TYPE,
+						))
+							if (
+								leaf.view instanceof Md2WechatView &&
+								leaf.view.sourcePath === old
+							)
+								leaf.view.sourcePath = file.path;
+						this.refresh();
+					})
+					.catch((e) => new Notice(String(e)));
+			}),
+		);
+		this.addSettingTab(new PublishingSettings(this.app, this));
+	}
+	onunload() {
+		this.processes.shutdownNow();
+	}
+	async saveSettings() {
+		await this.saveData({ ...this.legacy, ...this.settings });
+	}
+	async runner() {
+		return createCliRunner(
+			await locateCli(this.settings.cliPath),
+			this.processes,
+		);
+	}
+	async catalog() {
+		return new CatalogService(await this.runner()).load();
+	}
+	async source(
+		explicit?: string,
+	): Promise<{ sourcePath: string; markdown: string }> {
+		const current = this.app.workspace.getActiveViewOfType(MarkdownView);
+		const target =
+			explicit ?? current?.file?.path ?? this.recent?.file?.path;
+		if (!target) throw new Error("请先打开要排版的文章");
+		const file = this.app.vault.getAbstractFileByPath(target);
+		if (!(file instanceof TFile) || file.extension !== "md")
+			throw new Error("这篇文章已不存在，请重新打开文章");
+		const views = this.app.workspace
+			.getLeavesOfType("markdown")
+			.map((l) => l.view)
+			.filter(
+				(v): v is MarkdownView =>
+					v instanceof MarkdownView && v.file?.path === target,
+			);
+		const values = [...new Set(views.map((v) => v.editor.getValue()))];
+		if (values.length > 1)
+			throw new Error(
+				"同一篇文章在多个窗口内容不同，请先保留一个编辑版本",
+			);
+		if (!explicit && views.length === 0)
+			throw new Error("请先打开要排版的文章");
+		return {
+			sourcePath: target,
+			markdown: values[0] ?? (await this.app.vault.read(file)),
+		};
+	}
+	async capture(explicit?: string) {
+		const source = await this.source(explicit);
+		const assets = await resolveAssets(source.markdown, async (target) => {
+			if (/^https?:\/\//i.test(target))
+				return downloadImage(target, join(this.root, "downloads"));
+			const file = this.app.metadataCache.getFirstLinkpathDest(
+				target,
+				source.sourcePath,
+			);
+			return file instanceof TFile
+				? (this.app.vault.adapter as FileSystemAdapter).getFullPath(
+						file.path,
+					)
+				: null;
+		});
+		const previousResult = await this.store.current(
+			source.sourcePath,
+			source.markdown,
+		);
+		const result = await this.store.capture({ ...source, assets });
+		return {
+			...result,
+			previousResult: previousResult
+				? {
+						markdownFile: previousResult.markdownFile,
+						state: previousResult.state,
+					}
+				: undefined,
+			vaultPath: (
+				this.app.vault.adapter as FileSystemAdapter
+			).getBasePath(),
+		};
+	}
+	async present(request: string, files: ResultFiles) {
+		const captured = await this.store.request(request);
+		const source = await this.source(captured.sourcePath);
+		const result = await this.store.present(
+			request,
+			files,
+			source.markdown,
+		);
+		await this.openPreview(captured.sourcePath);
+		return {
+			requestId: request,
+			state: result.state === "current" ? "presented" : result.state,
+		};
+	}
+	async previewOriginal(
+		sourcePath?: string,
+		theme?: string,
+		fontSize = "medium",
+		formatted?: string,
+	) {
+		const request = await this.capture(sourcePath);
+		const catalog = await this.catalog();
+		const content =
+			formatted ?? (await readFile(request.inputFile, "utf8"));
+		const files = await renderPreview(
+			await this.runner(),
+			request,
+			content,
+			theme ?? catalog.defaultTheme,
+			fontSize,
+		);
+		await this.present(request.requestId, files);
+	}
+	async openPreview(sourcePath?: string) {
+		let leaf = this.app.workspace.getLeavesOfType(MD2WECHAT_VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf =
+				this.app.workspace.getRightLeaf(false) ??
+				this.app.workspace.getLeaf("tab");
+			await leaf.setViewState({
+				type: MD2WECHAT_VIEW_TYPE,
+				active: true,
+			});
+		}
+		await this.app.workspace.revealLeaf(leaf);
+		if (leaf.view instanceof Md2WechatView) {
+			if (sourcePath) leaf.view.sourcePath = sourcePath;
+			await leaf.view.refresh();
+		}
+	}
+	refresh() {
+		for (const leaf of this.app.workspace.getLeavesOfType(
+			MD2WECHAT_VIEW_TYPE,
+		))
+			if (leaf.view instanceof Md2WechatView) void leaf.view.refresh();
+	}
 }
-
-
-// 设置页面的实现
-class Md2WechatSettingTab extends PluginSettingTab {
-  plugin: Md2WechatPlugin;
-
-  constructor(app: App, plugin: Md2WechatPlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-
-  display(): void {
-    const { containerEl } = this;
-
-    containerEl.empty();
-
-    containerEl.createEl('h2', { text: '公众号排版助手设置' });
-
-    new Setting(containerEl)
-      .setName('API Key')
-      .setDesc('请输入从 md2wechat.cn 获取的 API Key。')
-      .addText(text => text
-        .setPlaceholder('wme_your_api_key_here')
-        .setValue(this.plugin.settings.apiKey)
-        .onChange(async (value) => {
-          this.plugin.settings.apiKey = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // 添加说明文本
-    containerEl.createEl('p', {
-      text: '💡 主题和字体大小设置已移到预览窗口的工具栏中，方便实时调整和预览效果。',
-      cls: 'setting-item-description'
-    });
-  }
+class PublishingSettings extends PluginSettingTab {
+	constructor(
+		app: import("obsidian").App,
+		private plugin: Md2WechatPlugin,
+	) {
+		super(app, plugin);
+	}
+	display() {
+		this.containerEl.empty();
+		new Setting(this.containerEl).setName("公众号排版").setHeading();
+		new Setting(this.containerEl)
+			.setName("md2wechat 位置")
+			.setDesc(
+				"通常自动找到。只有找不到时才填写程序的完整路径。账号在 md2wechat 中管理。",
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.cliPath)
+					.setPlaceholder("自动查找")
+					.onChange(async (value) => {
+						this.plugin.settings.cliPath = value.trim();
+						await this.plugin.saveSettings();
+					}),
+			);
+		new Setting(this.containerEl)
+			.setName("使用你的 Agent")
+			.setDesc(
+				"在支持本地工具的 Agent 中安装随插件提供的 obsidian-md2wechat 技能。多个 Agent 可以同时使用，无需选择默认工具。",
+			);
+	}
 }

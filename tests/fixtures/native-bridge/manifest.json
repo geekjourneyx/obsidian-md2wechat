@@ -1,0 +1,1 @@
+{"id":"md2wechat-probe","name":"MD2Wechat Native Bridge Probe","version":"0.0.1","minAppVersion":"1.12.7","description":"Isolated test fixture. Never distribute with the plugin.","author":"MD2Wechat","isDesktopOnly":true}
