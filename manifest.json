@@ -1,7 +1,7 @@
 {
   "id": "md2wechat-publisher",
   "name": "MD2WeChat Publisher",
-  "version": "2.0.0-beta.1",
+  "version": "2.0.0",
   "minAppVersion": "1.12.7",
   "description": "使用你的 Agent 排版当前文章，在 Obsidian 中预览并确认创建公众号草稿。",
   "author": "geekjourneyx",

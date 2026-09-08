@@ -1,6 +1,6 @@
 {
   "name": "obsidian-md2wechat",
-  "version": "2.0.0-beta.1",
+  "version": "2.0.0",
   "description": "Agent 排版、Obsidian 预览与确认创建公众号草稿",
   "main": "main.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "test": "vitest run",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run build",
+    "package": "npm run build && node scripts/package-release.mjs"
   },
   "keywords": [],
   "author": "",

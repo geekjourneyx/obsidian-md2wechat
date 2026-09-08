@@ -1,0 +1,81 @@
+name: Check and release
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Install CLI for read-only integration tests
+        run: npm install -g @geekjourneyx/md2wechat@3.5.0
+      - run: md2wechat version --json
+      - run: npm run check
+      - run: npm run package
+      - name: Verify install archive
+        run: |
+          python3 - <<'PY'
+          import json, zipfile
+          from pathlib import Path
+          m = json.loads(Path('manifest.json').read_text())
+          with zipfile.ZipFile(f"artifacts/release/{m['id']}-{m['version']}.zip") as z:
+              names = z.namelist()
+              for n in ['main.js','manifest.json','styles.css','skills/obsidian-md2wechat/SKILL.md']:
+                  assert f"{m['id']}/{n}" in names, n
+              assert all(n.startswith(m['id'] + '/') for n in names)
+              assert not any(n.endswith('data.json') or 'node_modules/' in n for n in names)
+              assert json.loads(z.read(m['id']+'/manifest.json')) == m
+          PY
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+      - name: Prepare release notes
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const {version}=JSON.parse(readFileSync('manifest.json'));
+          const log=readFileSync('CHANGELOG.md','utf8');
+          const start=log.indexOf(`## [${version}]`);
+          if(start<0) throw Error('Missing changelog');
+          const end=log.indexOf('\n## [',start+1);
+          writeFileSync('artifacts/release/notes.md',log.slice(start,end<0?undefined:end)+'\n\n下载 md2wechat-publisher-'+version+'.zip 解压安装。请先按 README 安装并配置 md2wechat。Source code 不是安装包。\n');
+          JS
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          assets=(artifacts/release/*.zip artifacts/release/main.js artifacts/release/manifest.json artifacts/release/styles.css artifacts/release/SHA256SUMS.txt)
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --title "$RELEASE_TAG · Agent 排版与草稿发布" --notes-file artifacts/release/notes.md --latest
+          fi

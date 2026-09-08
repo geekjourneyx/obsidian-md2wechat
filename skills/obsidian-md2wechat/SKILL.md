@@ -3,9 +3,11 @@ name: obsidian-md2wechat
 description: Format the current Obsidian article with the existing md2wechat CLI and return its preview to the Obsidian publishing plugin. Use when the user asks to typeset an Obsidian note for WeChat.
 ---
 
-# Obsidian article handoff
+# Obsidian article handoff · 2.0
 
 Requires desktop Obsidian and installer 1.12.7+, its official CLI enabled, the MD2WeChat Publisher plugin, and the existing md2wechat CLI. Works through local commands and files; no Agent-specific API or server is involved.
+
+Setup prerequisite: install https://github.com/geekjourneyx/md2wechat-skill with `npm install -g @geekjourneyx/md2wechat`, check `md2wechat version --json`, initialize new configurations with `md2wechat config init --json`, and run `md2wechat config validate --json`. Do not reinitialize an existing user's configuration without need.
 
 1. Identify the intended Vault. If several are open and the user has not identified one, ask which Vault; never guess a different article. The Vault selector precedes the command:
 

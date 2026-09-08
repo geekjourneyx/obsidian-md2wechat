@@ -111,40 +111,6 @@
 .md2w-publishing .md2w-muted {
 	color: var(--text-muted);
 }
-.md2w-publishing .md2w-footer {
-	flex: none;
-	display: flex;
-	gap: 12px;
-	align-items: center;
-	justify-content: space-between;
-	padding: 14px 16px;
-}
-.md2w-publishing .md2w-footer-note {
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	line-height: 1.5;
-	max-width: 180px;
-}
-.md2w-publishing .md2w-footer button {
-	flex: none;
-}
-.md2w-publishing button:focus-visible {
-	outline: 2px solid var(--interactive-accent);
-	outline-offset: 2px;
-}
-@container (max-width:350px) {
-	.md2w-publishing .md2w-footer {
-		align-items: stretch;
-		flex-direction: column;
-		gap: 8px;
-	}
-	.md2w-publishing .md2w-footer-note {
-		max-width: none;
-	}
-	.md2w-publishing .md2w-heading {
-		padding: 16px 16px 8px;
-	}
-}
 .md2w-confirm .md2w-cover {
 	display: block;
 	width: 160px;
@@ -163,6 +129,101 @@
 	line-height: 1.7;
 	color: var(--text-muted);
 }
-.md2w-publishing .md2w-footer {
-	padding-bottom: calc(14px + var(--status-bar-height, 24px));
+
+/* Compact native header: article identity, then one action row. */
+.md2w-publishing .md2w-heading {
+	padding: 16px 16px 10px;
+}
+.md2w-publishing .md2w-heading h2 {
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	line-height: 1.4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.md2w-publishing .md2w-toolbar {
+	padding: 0 16px 12px;
+	gap: 4px;
+	flex: none;
+}
+.md2w-publishing .md2w-toolbar button {
+	min-height: 30px;
+	white-space: nowrap;
+}
+.md2w-publishing .md2w-icon-button > span:last-child {
+	display: none;
+}
+.md2w-publishing .md2w-primary-actions {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.md2w-publishing .md2w-primary-actions button.mod-cta {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	padding: 6px 12px;
+}
+.md2w-publishing .md2w-primary-actions button[hidden] {
+	display: none;
+}
+.md2w-publishing .md2w-draft-receipt:empty {
+	display: none;
+}
+.md2w-publishing .md2w-draft-receipt a {
+	font-size: var(--font-ui-small);
+	white-space: nowrap;
+}
+.md2w-publishing .md2w-status {
+	padding: 0 16px 12px;
+}
+.md2w-publishing :is(button, a):focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+@container (max-width: 360px) {
+	.md2w-publishing .md2w-primary-actions {
+		flex-basis: 100%;
+		justify-content: flex-end;
+		margin-top: 4px;
+	}
+}
+
+/* Isolate controls from themes that reset direct sidebar div padding. */
+.md2w-publishing .md2w-controls {
+	flex: none;
+	min-width: 0;
+}
+.md2w-publishing .md2w-toolbar {
+	align-items: center;
+	row-gap: 8px;
+}
+.md2w-publishing .md2w-toolbar button {
+	box-sizing: border-box;
+	height: 32px;
+	min-height: 32px;
+	margin: 0;
+	line-height: 1;
+	border-radius: var(--radius-s);
+}
+.md2w-publishing .md2w-primary-actions {
+	align-self: center;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+.md2w-publishing .md2w-draft-receipt a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 0 6px;
+	border-radius: var(--radius-s);
+}
+.md2w-publishing .md2w-draft-receipt a:hover {
+	background: var(--background-modifier-hover);
+}
+.md2w-publishing .md2w-toolbar button:disabled {
+	cursor: default;
+	opacity: 0.5;
 }

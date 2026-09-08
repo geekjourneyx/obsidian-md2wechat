@@ -25,12 +25,13 @@ export type FrozenDraft = {
 	}[];
 };
 export type DraftOutcome =
-	| { kind: "completed"; mediaId: string }
+	| { kind: "completed"; mediaId: string; draftUrl?: string }
 	| { kind: "blocked"; message: string }
 	| { kind: "unknown"; message: string };
 type Attempt = {
 	state: "started" | "completed" | "unknown";
 	mediaId?: string;
+	draftUrl?: string;
 	stage: string;
 };
 export async function createConfirmedDraft(
@@ -53,7 +54,11 @@ export async function createConfirmedDraft(
 			}
 			if (previous)
 				return previous.state === "completed" && previous.mediaId
-					? { kind: "completed" as const, mediaId: previous.mediaId }
+					? {
+							kind: "completed" as const,
+							mediaId: previous.mediaId,
+							draftUrl: previous.draftUrl,
+						}
 					: {
 							kind: "unknown" as const,
 							message:
@@ -208,7 +213,7 @@ export async function createConfirmedDraft(
 				attempt.stage = "已请求创建草稿";
 				await atomicJSON(record, attempt);
 				const draft = completed(
-					await runner.run<{ media_id: string }>([
+					await runner.run<{ media_id: string; draft_url?: string }>([
 						"create_draft",
 						jsonFile,
 						...accountArgs,
@@ -224,8 +229,13 @@ export async function createConfirmedDraft(
 					state: "completed",
 					stage: "草稿已创建",
 					mediaId: draft.media_id,
+					draftUrl: draft.draft_url,
 				});
-				return { kind: "completed" as const, mediaId: draft.media_id };
+				return {
+					kind: "completed" as const,
+					mediaId: draft.media_id,
+					draftUrl: draft.draft_url,
+				};
 			} catch {
 				await atomicJSON(record, { ...attempt, state: "unknown" });
 				return {

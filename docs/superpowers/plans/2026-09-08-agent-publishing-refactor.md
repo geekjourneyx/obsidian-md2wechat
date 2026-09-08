@@ -1,3 +1,5 @@
+> 历史设计/验收记录，保留当时上下文。2.0 当前安装、配置和使用方法以 README.md、INSTALL.md 和 CHANGELOG.md 为准。
+
 # 通用 Agent 排版发布重构 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 默认在当前任务逐项执行，不自动创建子智能体。

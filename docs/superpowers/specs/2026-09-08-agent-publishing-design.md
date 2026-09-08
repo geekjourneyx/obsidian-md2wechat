@@ -1,3 +1,5 @@
+> 历史设计/验收记录，保留当时上下文。2.0 当前安装、配置和使用方法以 README.md、INSTALL.md 和 CHANGELOG.md 为准。
+
 # Obsidian 通用 Agent 排版发布体验设计
 
 日期：2026-09-08（CLI 必要性复核后修订）  

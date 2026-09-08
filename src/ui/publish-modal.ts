@@ -182,12 +182,13 @@ export class PublishModal extends Modal {
 							);
 							if (outcome.kind === "completed") {
 								this.plugin.settings.lastAccount = account.name;
-								await this.plugin.saveSettings();
-								feedback.setText(
-									"草稿已创建。请到公众号草稿箱查看。",
-								);
+								this.close();
 								new Notice("公众号草稿已创建");
-								button.setButtonText("已创建");
+								this.plugin.refresh();
+								// Saving a preference must never turn a successful draft into a retry.
+								await this.plugin
+									.saveSettings()
+									.catch(() => {});
 							} else {
 								feedback.setText(outcome.message);
 								if (outcome.kind === "blocked") {

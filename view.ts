@@ -11,6 +11,8 @@ import type Md2WechatPlugin from "./main";
 import { type Result } from "./src/results/result-store";
 import { PublishModal } from "./src/ui/publish-modal";
 import { preparePreview } from "./src/preview/prepare-preview";
+import { CatalogService } from "./src/cli/catalog-service";
+import { articleDraft } from "./src/publish/draft-link";
 export const MD2WECHAT_VIEW_TYPE = "md2wechat-html-view";
 export class Md2WechatView extends ItemView {
 	sourcePath = "";
@@ -23,6 +25,8 @@ export class Md2WechatView extends ItemView {
 	private title!: HTMLElement;
 	private publish!: HTMLButtonElement;
 	private displayed = "";
+	private receipt!: HTMLElement;
+	private update!: HTMLButtonElement;
 	constructor(
 		leaf: WorkspaceLeaf,
 		private plugin: Md2WechatPlugin,
@@ -52,18 +56,35 @@ export class Md2WechatView extends ItemView {
 	async onOpen() {
 		this.contentEl.empty();
 		this.contentEl.addClass("md2w-publishing");
-		const header = this.contentEl.createDiv("md2w-heading");
-		header.createDiv({ cls: "md2w-eyebrow", text: "公众号排版" });
+		const controls = this.contentEl.createEl("section", {
+			cls: "md2w-controls",
+			attr: { "aria-label": "排版与草稿操作" },
+		});
+		const header = controls.createDiv("md2w-heading");
 		this.title = header.createEl("h2", { text: "让好内容，好好呈现" });
-		this.toolbar = this.contentEl.createDiv("md2w-toolbar");
+		this.toolbar = controls.createDiv("md2w-toolbar");
 		this.button(
 			this.toolbar,
 			"主题",
 			"palette",
 			(event) => void this.chooseTheme(event),
 		);
-		this.button(this.toolbar, "字号", "type", (event) => {
+
+		this.update = this.button(
+			this.toolbar,
+			"刷新排版",
+			"refresh-cw",
+			() => void this.refreshLayout(),
+		);
+		const more = this.button(this.toolbar, "更多", "ellipsis", (event) => {
 			const menu = new Menu();
+			menu.addItem((item) =>
+				item
+					.setTitle("复制排版")
+					.setIcon("copy")
+					.onClick(() => void this.copy()),
+			);
+			menu.addSeparator();
 			for (const [label, size] of [
 				["小", "small"],
 				["中", "medium"],
@@ -71,23 +92,15 @@ export class Md2WechatView extends ItemView {
 			])
 				menu.addItem((item) =>
 					item
-						.setTitle(label)
+						.setTitle(`字号 · ${label}`)
 						.onClick(() => void this.rerender(undefined, size)),
 				);
 			menu.showAtMouseEvent(event);
 		});
-		this.button(this.toolbar, "复制排版", "copy", () => void this.copy());
-		this.status = this.contentEl.createDiv({
-			cls: "md2w-status",
-			attr: { role: "status", "aria-live": "polite" },
-		});
-		this.article = this.contentEl.createDiv("md2w-article");
-		const footer = this.contentEl.createDiv("md2w-footer");
-		footer.createSpan({
-			text: "确认后才会上传并创建草稿",
-			cls: "md2w-footer-note",
-		});
-		this.publish = footer.createEl("button", {
+		more.addClass("md2w-icon-button");
+		const actions = this.toolbar.createDiv("md2w-primary-actions");
+		this.receipt = actions.createDiv("md2w-draft-receipt");
+		this.publish = actions.createEl("button", {
 			text: "创建草稿",
 			cls: "mod-cta",
 		});
@@ -96,6 +109,11 @@ export class Md2WechatView extends ItemView {
 			if (this.result?.state === "current")
 				new PublishModal(this.plugin, this.result).open();
 		});
+		this.status = controls.createDiv({
+			cls: "md2w-status",
+			attr: { role: "status", "aria-live": "polite" },
+		});
+		this.article = this.contentEl.createDiv("md2w-article");
 		await this.refresh();
 	}
 	button(
@@ -131,18 +149,23 @@ export class Md2WechatView extends ItemView {
 				: null;
 			if (generation !== this.generation) return;
 			this.result = result;
+			this.receipt.empty();
+			this.publish.hidden = false;
+			this.publish.setText("创建草稿");
+			if (result) void this.showReceipt(result, generation);
 			this.title.setText(
 				this.sourcePath.replace(/\.md$/, "").split("/").pop() ||
 					"让好内容，好好呈现",
 			);
 			this.toolbar.hidden = !result;
+			this.update.disabled = this.busy;
 			this.publish.disabled =
 				!result || result.state !== "current" || this.busy;
 			if (result) {
 				this.status.setText(
 					result.state === "source_changed"
-						? "原文已更新。这是上次排版，重新排版后再创建草稿。"
-						: "排版已就绪，按正文效果确认。",
+						? "原文有修改 · 点击刷新排版查看最新效果"
+						: "",
 				);
 				if (this.displayed !== result.id) {
 					const preview = await preparePreview(
@@ -200,10 +223,85 @@ export class Md2WechatView extends ItemView {
 			this.publish.disabled = true;
 		}
 	}
+	async showReceipt(result: Result, generation: number) {
+		try {
+			const accounts = await new CatalogService(
+				await this.plugin.runner(),
+			).accounts();
+			const receipts = await Promise.all(
+				accounts.map(async (account) => ({
+					account,
+					link: await articleDraft(
+						this.plugin.root,
+						result,
+						account.appid,
+					),
+				})),
+			);
+			const found = receipts
+				.filter((item) => item.link)
+				.sort(
+					(a, b) =>
+						Number(b.link!.current) - Number(a.link!.current) ||
+						b.link!.createdAt - a.link!.createdAt,
+				)[0];
+			const link = found?.link;
+			if (generation !== this.generation) return;
+			if (!link) {
+				if (!this.busy && result.state === "current")
+					this.status.setText("尚无创建草稿记录");
+				return;
+			}
+			this.receipt.empty();
+
+			const action = this.receipt.createEl("a", {
+				text: link.label,
+				href: link.url,
+				attr: { target: "_blank", rel: "noopener noreferrer" },
+			});
+			action.addEventListener("click", (event) => {
+				event.preventDefault();
+				void (
+					require("electron") as {
+						shell: { openExternal(url: string): Promise<void> };
+					}
+				).shell
+					.openExternal(link.url)
+					.catch(
+						() =>
+							new Notice(
+								"无法打开浏览器，请前往公众号后台查看草稿",
+							),
+					);
+			});
+			if (!this.busy) {
+				const date = new Date(link.createdAt).toLocaleString("zh-CN", {
+					month: "numeric",
+					day: "numeric",
+					hour: "2-digit",
+					minute: "2-digit",
+				});
+				const name =
+					found.account.name ||
+					`公众号 · ${found.account.appid.slice(-4)}`;
+				this.status.setText(
+					link.current
+						? `此版本已创建草稿 · ${name} · ${date}`
+						: `旧版本曾创建草稿 · ${name} · ${date}。${result.state === "source_changed" ? "原文有修改，请刷新排版。" : "当前排版尚未创建草稿。"}`,
+				);
+			}
+			this.publish.hidden = link.current && accounts.length === 1;
+			this.publish.setText(link.current ? "其他公众号…" : "创建新版草稿");
+		} catch {
+			/* Preview remains usable when account lookup is unavailable. */
+		}
+	}
+
 	async run(action: () => Promise<void>) {
 		if (this.busy) return;
 		this.busy = true;
 		this.publish.disabled = true;
+		this.update.disabled = true;
 		this.status.setText("正在排版，完成后会替换预览…");
 		try {
 			await action();
@@ -211,6 +309,7 @@ export class Md2WechatView extends ItemView {
 			this.status.setText(e instanceof Error ? e.message : String(e));
 		} finally {
 			this.busy = false;
+			this.update.disabled = false;
 			this.publish.disabled =
 				!this.result || this.result.state !== "current";
 		}
@@ -227,6 +326,22 @@ export class Md2WechatView extends ItemView {
 			new Notice(String(e));
 		}
 	}
+	async refreshLayout() {
+		if (!this.result || this.busy) return;
+		const result = this.result;
+		await this.run(async () => {
+			const response = JSON.parse(
+				await readFile(result.previewResponseFile, "utf8"),
+			);
+			// Capture fresh source, including unsaved edits; never reuse stale formatted text.
+			await this.plugin.previewOriginal(
+				this.sourcePath,
+				response.data.render.theme,
+				response.data.inspect.context.font_size,
+			);
+		});
+	}
+
 	async rerender(theme?: string, size?: string) {
 		if (!this.result) return;
 		if (this.result.state !== "current") {
