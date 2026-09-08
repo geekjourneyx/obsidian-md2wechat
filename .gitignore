@@ -24,3 +24,4 @@ data.json
 CLAUDE.md
 
 *.zip
+.worktrees/
