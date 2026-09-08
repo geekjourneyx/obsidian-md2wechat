@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 协议变更
+
+- 项目开源协议由 MIT 调整为 GNU Affero General Public License v3.0（AGPL-3.0-only）。
+
 ## [2.0.0] - 2026-09-09
 
 ### 全新发布

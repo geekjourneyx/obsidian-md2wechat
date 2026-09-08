@@ -65,4 +65,4 @@ npm run package
 
 [开发指南](dev.md) · [发布流程](RELEASE.md) · [更新日志](CHANGELOG.md) · [验收记录](https://github.com/geekjourneyx/obsidian-md2wechat/blob/main/docs/verification/experience-matrix.md)
 
-MIT License.
+本项目采用 [GNU Affero General Public License v3.0](LICENSE)。

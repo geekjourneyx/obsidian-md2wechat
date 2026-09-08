@@ -13,7 +13,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "@types/node": "^22.12.0",
     "@typescript-eslint/eslint-plugin": "5.29.0",
