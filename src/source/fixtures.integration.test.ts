@@ -1,5 +1,5 @@
 import { locateCli } from "../cli/catalog-service";
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import { readFile, writeFile, readdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,7 +8,9 @@ import { stageSource } from "./stage-source";
 import { createCliRunner } from "../cli/runner";
 import { completed } from "../cli/catalog-service";
 it("stages ten representative articles and resolves all local images in the actual CLI", async () => {
-	const fixture = resolve("tests/fixtures/articles");
+	// inspect is read-only; do not rely on a developer account configuration.
+ vi.stubEnv("MD2WECHAT_API_KEY", "offline-inspect-test-only");
+ const fixture = resolve("tests/fixtures/articles");
 	const root = await mkdtemp(join(tmpdir(), "md2wechat-fixtures-"));
 	try {
 		for (const name of (await readdir(fixture)).filter((n) =>
@@ -41,6 +43,7 @@ it("stages ten representative articles and resolves all local images in the actu
 			expect(await readFile(join(fixture, name), "utf8")).toBe(original);
 		}
 	} finally {
+ vi.unstubAllEnvs();
 		await rm(root, { recursive: true, force: true });
 	}
 }, 20000);
