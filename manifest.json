@@ -1,9 +1,9 @@
 {
   "id": "md2wechat-publisher",
   "name": "MD2WeChat Publisher",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "minAppVersion": "1.12.7",
-  "description": "使用你的 Agent 排版当前文章，在 Obsidian 中预览并确认创建公众号草稿。",
+  "description": "Preview Markdown layouts and create WeChat Official Account drafts with the separately installed md2wechat CLI. Requires a paid API key.",
   "author": "geekjourneyx",
   "authorUrl": "https://github.com/geekjourneyx",
   "isDesktopOnly": true

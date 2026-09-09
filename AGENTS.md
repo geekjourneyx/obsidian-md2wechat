@@ -27,7 +27,7 @@ md2wechat config validate --json
 
 版本同步 package.json、package-lock.json、manifest.json、versions.json。每次发布更新 CHANGELOG、README、INSTALL、RELEASE 及相关指南；历史方案保留但明确标注历史，不充当最新操作指南。
 
-npm run package 产生安装包。推送 v + manifest.version 的标签触发 GitHub Release 工作流。保留 md2wechat-publisher 插件 ID；包内必须有三个插件文件与配套技能，不包含 data.json 或用户资料。发布后下载 ZIP 实际核验。插件市场提交需另行安排。
+npm run package 产生安装包。推送与 manifest.version 完全一致、不带 v 的标签触发 GitHub Release 工作流。保留 md2wechat-publisher 插件 ID；包内必须有三个插件文件与配套技能，不包含 data.json 或用户资料。发布后下载 ZIP 实际核验。插件市场提交需另行安排。
 
 ## 沟通
 
