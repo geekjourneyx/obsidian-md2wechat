@@ -15,7 +15,7 @@ md2wechat config validate --json
 
 ## 2. 安装插件
 
-在 [Release](https://github.com/geekjourneyx/obsidian-md2wechat/releases/latest) 下载 `md2wechat-publisher-2.0.0.zip`。解压后将 `md2wechat-publisher` 文件夹复制到笔记库的 `.obsidian/plugins/`，最终结构：
+在 [Release](https://github.com/geekjourneyx/obsidian-md2wechat/releases/latest) 下载 `md2wechat-publisher-2.0.1.zip`。解压后将 `md2wechat-publisher` 文件夹复制到笔记库的 `.obsidian/plugins/`，最终结构：
 
 ```text
 你的笔记库/
@@ -39,3 +39,7 @@ md2wechat config validate --json
 仅使用“先预览当前文章”、刷新和确认草稿时，不要求 Agent。让 Agent 自动取文章并送回排版时，需要启用 Obsidian 官方命令行，并将包内技能安装到 Agent 支持的技能目录。旧安装程序即使更新了 Obsidian 内部版本，也可能需要从 Obsidian 官网重新下载安装程序才能启用命令行。
 
 详见 [第一次使用](https://github.com/geekjourneyx/obsidian-md2wechat/blob/main/docs/FIRST-RUN.md)。目前尚未在插件市场上架 2.0。
+
+## 社区市场与手动 ZIP 的区别
+
+当前尚未上架。官方社区市场只下载 `main.js`、`manifest.json` 和 `styles.css`，不会安装 ZIP 中的技能与文档。上架后，仅使用原生预览与草稿流程不需要技能文件；Agent 接入仍需手动从同版本 ZIP 提取 `skills/obsidian-md2wechat`。费用、网络请求和库外缓存位置见 [README 使用前须知](README.md#使用前须知费用联网与本地文件)。

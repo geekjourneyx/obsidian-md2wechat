@@ -1,6 +1,6 @@
 {
   "name": "obsidian-md2wechat",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Agent 排版、Obsidian 预览与确认创建公众号草稿",
   "main": "main.js",
   "scripts": {

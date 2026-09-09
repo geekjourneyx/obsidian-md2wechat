@@ -19,6 +19,18 @@
 
 2.0 基于 [md2wechat](https://github.com/geekjourneyx/md2wechat-skill)。插件负责预览和确认，排版、图片上传和草稿创建由已安装的 md2wechat 完成。插件内无需填写接口地址或密钥。
 
+## 使用前须知：费用、联网与本地文件
+
+插件源码免费开源；当前内置预览与刷新使用 md2wechat 专业 API，**需要另行购买并配置 API Key**。价格及获取方式见 [md2wechat 服务说明](https://www.md2wechat.cn/api-docs)。创建草稿还需要具有相应接口权限的微信公众号及凭证；可选 Agent 的订阅/API 费用由其提供商另行收取。
+
+- **外部程序**：用户手动安装和更新 md2wechat。插件只调用已安装的程序，不自动下载安装或更新自身、CLI 或 Agent 技能。
+- **排版联网**：点击预览/刷新或让 Agent 执行排版时，文章正文及排版选项会经 md2wechat 发送到配置的排版 API（默认 md2wechat 服务）。这一步发生在草稿确认之前，不能理解为全文始终离线。
+- **远程图片**：捕获文章时会下载正文中引用的 HTTPS 图片，图片服务器会收到请求。预览使用固定的本地图片副本；最终确认之前不上传本地图片到微信。
+- **微信接口**：确认创建草稿后，CLI 将文章、封面及正文图片发送至微信接口；如果配置了代理或固定出口服务，请同时核对该服务的数据处理方式。
+- **可选 Agent**：用户选择的 Agent 可能将文章、工具输出和图片发送给其模型供应商；插件不预选供应商，也不代替 Agent 管理权限。
+- **笔记库外的文件**：为保护原文并与外部 CLI/Agent 交换文件，插件将文章副本、图片、HTML、请求和草稿记录保存在系统用户数据目录下的 `md2wechat/obsidian-results/<vault-hash>/`。macOS 使用 `~/Library/Application Support`，Windows 使用 `LOCALAPPDATA`（未设置时为用户主目录），Linux 使用 `XDG_DATA_HOME` 或 `~/.local/share`。这些副本不由 Obsidian Sync 管理，卸载插件不会自动删除；不再需要时可在关闭插件后自行删除对应目录。
+- **凭证与统计**：公众号/API 凭证由外部 CLI 配置管理；旧插件 `data.json` 可能保留旧凭证。当前插件源码未包含客户端遥测。外部服务的日志、保存期限和隐私条款由服务提供商负责，不能据此推断服务端不保留数据。md2wechat 的 API 内容传输与网站统计说明见 [隐私政策](https://www.md2wechat.cn/privacy)；自定义 API、发布代理及 Agent 服务需分别查看其隐私政策。
+
 ## 下载和安装
 
 ### 1. 准备 md2wechat
@@ -40,7 +52,7 @@ md2wechat config validate --json
 2. 解压，把其中的 **md2wechat-publisher** 文件夹放进笔记库的 `.obsidian/plugins/`。
 3. 重启 Obsidian，在“设置 → 第三方插件”启用 **MD2WeChat Publisher**。
 
-需要桌面 Obsidian 1.12.7+。安装后路径应为 `.obsidian/plugins/md2wechat-publisher/main.js`，不要多套一层目录。当前提供手动安装包，插件市场审核将另行提交。
+需要桌面 Obsidian 1.12.7+。安装后路径应为 `.obsidian/plugins/md2wechat-publisher/main.js`，不要多套一层目录。当前提供手动安装包，官方社区目录申请准备中，尚未上架。
 
 [完整安装与旧版升级说明](INSTALL.md) · [第一次使用](docs/FIRST-RUN.md)
 
@@ -61,7 +73,7 @@ md2wechat config validate --json
 插件不指定或自动选择 Agent。Claude Code、Codex、WorkBuddy、ZCode 等具备本地命令执行、文件读写与技能支持的工具，可使用相同接入约定；没有逐个承诺宿主兼容。
 
 - 启用 Obsidian 官方命令行；这需要 Obsidian 和安装程序均支持该功能。
-- 将安装包中的 `skills/obsidian-md2wechat` 安装到所用 Agent 的技能目录，并保留 md2wechat 自带技能。
+- 将安装包中的 `skills/obsidian-md2wechat` 安装到所用 Agent 的技能目录，并保留 md2wechat 自带技能。社区市场安装只包含三个插件文件；上架后经市场安装的用户，需另从同版本 Release ZIP 手动提取技能，插件不会自动安装。
 - 多个笔记库同时打开时，告诉 Agent 要使用哪一个。
 
 [Agent 技能说明](skills/obsidian-md2wechat/SKILL.md) · [兼容范围](docs/AGENT-COMPATIBILITY.md)
@@ -99,7 +111,7 @@ npm run check
 npm run package
 ```
 
-检查需要本机已安装 md2wechat。打包结果在 `artifacts/release/`。推送与版本号一致的标签（例如 `v2.0.0`）后，GitHub Actions 自动检查、打包并上传 ZIP、三个插件文件和校验文件到 Release。
+检查需要本机已安装 md2wechat。打包结果在 `artifacts/release/`。推送与版本号一致的标签（例如 `2.0.1`，不带 `v`）后，GitHub Actions 自动检查、打包并上传 ZIP、三个插件文件和校验文件到 Release。
 
 [开发指南](dev.md) · [发布流程](RELEASE.md) · [更新日志](CHANGELOG.md) · [验收记录](https://github.com/geekjourneyx/obsidian-md2wechat/blob/main/docs/verification/experience-matrix.md)
 
