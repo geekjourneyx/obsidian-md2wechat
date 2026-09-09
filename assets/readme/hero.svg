@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
+  <title id="title">MD2WeChat Publisher — From your notes to WeChat drafts</title>
+  <desc id="desc">An Obsidian publishing companion. Format with your Agent, preview beside your notes, and confirm before creating a WeChat draft. The page motif is a conceptual illustration, not a product screenshot.</desc>
+  <rect width="1200" height="400" rx="20" fill="#111115"/>
+  <g id="editorial-title" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="60" y="65" fill="#BBA5F5" font-size="23" letter-spacing="3">OBSIDIAN / MD2WECHAT</text>
+    <text x="56" y="151" fill="#F5F3EF" font-size="66" font-weight="700">MD2WeChat</text>
+    <text x="59" y="212" fill="#F5F3EF" font-size="48" font-weight="400">Publisher</text>
+    <text x="60" y="271" fill="#C1BEC8" font-size="28">From your notes to WeChat drafts.</text>
+    <text x="60" y="345" fill="#BBA5F5" font-size="23">WRITE</text>
+    <text x="162" y="345" fill="#77727F" font-size="23">/</text>
+    <text x="190" y="345" fill="#F5F3EF" font-size="23">PREVIEW</text>
+    <text x="324" y="345" fill="#77727F" font-size="23">/</text>
+    <text x="354" y="345" fill="#F5F3EF" font-size="23">CONFIRM</text>
+  </g>
+  <g id="note-to-typeset-page" aria-hidden="true">
+    <rect x="760" y="66" width="232" height="268" rx="10" fill="#25212F" stroke="#635277" stroke-width="2"/>
+    <text x="786" y="116" font-family="ui-monospace, monospace" font-size="28" fill="#BBA5F5"># Note</text>
+    <path d="M786 148h150 M786 170h112 M786 208h134 M786 230h102 M786 270h90" fill="none" stroke="#8D7DA6" stroke-width="6"/>
+    <rect x="883" y="107" width="251" height="251" rx="10" fill="#F5F3EF"/>
+    <rect x="909" y="135" width="8" height="44" fill="#7C59B2"/>
+    <path d="M932 146h171 M932 166h123" fill="none" stroke="#28232F" stroke-width="8"/>
+    <path d="M911 208h193 M911 228h178 M911 248h191" fill="none" stroke="#918A98" stroke-width="5"/>
+    <rect x="911" y="275" width="194" height="53" rx="5" fill="#E5DFEF"/>
+    <path d="M928 294h145 M928 309h115" fill="none" stroke="#806D98" stroke-width="4"/>
+  </g>
+</svg>
