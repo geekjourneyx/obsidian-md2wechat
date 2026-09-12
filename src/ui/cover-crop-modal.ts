@@ -43,7 +43,6 @@ export class CoverCropModal extends Modal {
 		this.setTitle("调整封面裁剪");
 		this.contentEl.addClass("md2w-creation");
 		const feedback = this.contentEl.createEl("p", {
-			text: "调整取景后设为封面，原图片保持不变。",
 			attr: { role: "status", "aria-live": "polite" },
 		});
 		try {

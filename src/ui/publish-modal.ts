@@ -81,11 +81,11 @@ export class PublishModal extends Modal {
 				)
 			) {
 				content.createEl("p", {
-					text: "标题或封面来自较早的文章内容，请确认仍然适合当前成稿。",
+					text: "标题或封面根据旧版文章生成，请核对。",
 				});
 			}
 			feedback.setText(
-				"创建到公众号草稿箱，仍可在公众号后台继续编辑。不会直接发布。",
+				"确认后上传到公众号草稿箱，不会发布。",
 			);
 			new Setting(content).setName("公众号").addDropdown((drop) => {
 				drop.addOption("", "选择公众号");
@@ -133,7 +133,6 @@ export class PublishModal extends Modal {
 			}
 			new Setting(content)
 				.setName("封面")
-				.setDesc("选择笔记库中的图片，最终确认后才会上传。")
 				.addButton((button) =>
 					button
 						.setButtonText(coverFile ? "更换封面" : "选择封面")

@@ -24,7 +24,6 @@ import {
 } from "./src/ui/creation-modals";
 import { InsertImageModal } from "./src/ui/insert-image-modal";
 import { InspectionModal } from "./src/ui/inspection-modal";
-import { selectedTitle } from "./src/creation/creation-store";
 export const MD2WECHAT_VIEW_TYPE = "md2wechat-html-view";
 export class Md2WechatView extends ItemView {
 	async onClose() {
@@ -42,7 +41,6 @@ export class Md2WechatView extends ItemView {
 	private displayed = "";
 	private receipt!: HTMLElement;
 	private update!: HTMLButtonElement;
-	private details!: HTMLElement;
 	private task?: AbortController;
 	private stop!: HTMLButtonElement;
 	constructor(
@@ -224,7 +222,6 @@ export class Md2WechatView extends ItemView {
 		this.stop.hidden = true;
 		this.stop.addEventListener("click", () => this.task?.abort());
 		this.plugin.register(() => this.task?.abort());
-		this.details = controls.createDiv("md2w-publish-details");
 		this.article = this.contentEl.createDiv("md2w-article");
 		await this.refresh();
 	}
@@ -273,28 +270,12 @@ export class Md2WechatView extends ItemView {
 			this.update.disabled = this.busy;
 			this.publish.disabled =
 				!result || result.state !== "current" || this.busy;
-			this.details.empty();
-			if (source && this.plugin.creationStore) {
-				const choices = await this.plugin.creationStore.read(
-					this.sourcePath,
-				);
-				if (generation !== this.generation) return;
-				const picked = selectedTitle(choices);
-				if (picked)
-					this.details.createEl("div", {
-						text: `发布标题 · ${picked}`,
-					});
-				if (choices.coverPath)
-					this.details.createEl("div", {
-						text: "封面已选",
-					});
-			}
 			if (result) {
 				if (!this.busy)
 					this.status.setText(
 						result.state === "source_changed"
-							? "原文已更新 · 旧成稿已保留，请更新排版后再创建"
-							: "仅调整公众号成稿，原文不变",
+							? "原文已更新，请重新排版"
+							: "",
 					);
 				if (this.displayed !== result.id) {
 					const preview = await preparePreview(
@@ -319,13 +300,9 @@ export class Md2WechatView extends ItemView {
 				this.article.empty();
 				const empty = this.article.createDiv("md2w-empty");
 				empty.createEl("h3", {
-					text: source ? "把文章变成公众号成稿" : "从一篇文章开始",
+					text: source ? "选择排版方式" : "请先打开一篇笔记",
 				});
-				empty.createEl("p", {
-					text: source
-						? "排版、选择标题与图片，都在这里完成。你的原文保持不变。"
-						: "打开要排版的笔记，再回到这里。",
-				});
+
 				if (source) {
 					this.button(
 						empty,
@@ -375,7 +352,7 @@ export class Md2WechatView extends ItemView {
 			if (generation !== this.generation) return;
 			if (!link) {
 				if (!this.busy && result.state === "current")
-					this.status.setText("仅调整公众号成稿，原文不变");
+					this.status.setText("");
 				return;
 			}
 			this.receipt.empty();
@@ -506,7 +483,6 @@ export class Md2WechatView extends ItemView {
 					fontSize: response.data.inspect.context.font_size,
 				},
 			);
-			new Notice("本次以原文重新排版，确认采用后才替换当前成稿");
 			new DraftReviewModal(this.plugin, candidate).open();
 		});
 	}

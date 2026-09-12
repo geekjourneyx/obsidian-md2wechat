@@ -1,3 +1,4 @@
+import { titlePrompt } from "./title-request";
 import { withResourceUpdate } from "./rename-resources";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, extname, isAbsolute } from "node:path";
@@ -340,15 +341,13 @@ export class CreationController {
 		const dir = await mkdtemp(join(base, "titles-"));
 		const file = join(dir, "layout.md");
 		await writeFile(file, ctx.markdown, { mode: 0o600 });
-		const response = await (
-			await this.plugin.runner()
-		).run<any>(
-			["title", "suggest", file, "--hook-level", String(hook), "--json"],
-			{ signal },
+		const prompt = await titlePrompt(
+			await this.plugin.runner(),
+			file,
+			hook,
+			signal,
 		);
-		if (!response.success || typeof response.data.prompt !== "string")
-			throw new Error("无法准备标题建议，请检查 md2wechat");
-		const values = titleTexts(await this.ask(response.data.prompt, signal));
+		const values = titleTexts(await this.ask(prompt, signal));
 		if (signal?.aborted) throw new Error("已停止");
 		await this.candidateSourceUnchanged(sourcePath, ctx.source.markdown);
 		if (signal?.aborted) throw new Error("已停止");

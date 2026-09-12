@@ -146,16 +146,6 @@
 	line-height: 1.7;
 	color: var(--text-muted);
 }
-.md2w-publishing .md2w-publish-details {
-	padding: 0 var(--size-4-4, 16px) var(--size-4-3, 12px);
-	font-size: var(--font-ui-small);
-	color: var(--text-muted);
-	line-height: 1.6;
-	overflow-wrap: anywhere;
-}
-.md2w-publishing .md2w-publish-details:empty {
-	display: none;
-}
 .md2w-publishing .md2w-empty button {
 	margin-block: var(--size-4-2, 8px);
 	margin-inline-end: var(--size-4-2, 8px);
@@ -284,4 +274,8 @@
 }
 .md2w-confirm :is(input, textarea) {
 	width: 100%;
+}
+
+.md2w-creation > p:empty {
+	display: none;
 }

@@ -60,7 +60,7 @@ export class InspectionModal extends Modal {
 			if (this.closed) return;
 			if (!result.success)
 				throw new Error("检查未完成，请检查 md2wechat 配置后重试");
-			status.setText("成稿检查完成。创建前还会核对账号、标题和封面。");
+			status.setText("检查完成");
 			const checks = result.data.checks;
 			const list = Array.isArray(checks) ? checks : [];
 			for (const check of list) {
@@ -74,7 +74,7 @@ export class InspectionModal extends Modal {
 					text: "尚未选择封面，可在下一步选择。",
 				});
 			this.contentEl.createEl("p", {
-				text: "此检查确认成稿准备情况，不代表微信内容审核结果。",
+				text: "不包含微信内容审核。",
 				cls: "md2w-muted",
 			});
 			new Setting(this.contentEl)
@@ -83,7 +83,7 @@ export class InspectionModal extends Modal {
 				)
 				.addButton((b) =>
 					b
-						.setButtonText("核对创建资料")
+						.setButtonText("下一步")
 						.setCta()
 						.onClick(() => {
 							this.close();

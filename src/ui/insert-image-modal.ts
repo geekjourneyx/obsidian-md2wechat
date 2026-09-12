@@ -65,9 +65,6 @@ export class InsertImageModal extends Modal {
 	async onOpen() {
 		this.setTitle("添加正文配图");
 		this.contentEl.addClass("md2w-creation");
-		this.contentEl.createEl("p", {
-			text: "选择图片后确认插入，仅调整公众号成稿，原文不变。",
-		});
 		this.feedback = this.contentEl.createEl("p", {
 			attr: { role: "status", "aria-live": "polite" },
 		});
@@ -127,7 +124,7 @@ export class InsertImageModal extends Modal {
 				return Promise.resolve();
 			});
 			this.contentEl.createEl("p", {
-				text: "每次生成 2 张配图，会向生图服务发送所选段落，可能产生费用。不会自动重试；失败时保留已完成的图片。",
+				text: "每次生成 2 张，将发送所选段落，可能产生费用。",
 			});
 			const readiness = await imageReadiness(
 				await locateCli(this.plugin.settings.cliPath),
@@ -352,7 +349,7 @@ export class InsertImageModal extends Modal {
 				item.sourceHash !== hash(this.ctx!.source.markdown)
 			)
 				card.createEl("p", {
-					text: "来自旧版文章，可用于当前重新选择的段落。",
+					text: "根据旧版文章生成",
 				});
 			let src: string;
 			if (item.generated) {
@@ -433,7 +430,7 @@ export class InsertImageModal extends Modal {
 		await this.unchanged();
 		await this.plugin.creation.adopt(candidate);
 		if (!this.closed) {
-			new Notice("配图已插入公众号成稿，原文未改动");
+			new Notice("配图已插入");
 			this.close();
 		}
 	}

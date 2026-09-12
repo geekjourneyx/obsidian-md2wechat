@@ -317,7 +317,7 @@ class PublishingSettings extends PluginSettingTab {
 		new Setting(this.containerEl)
 			.setName("md2wechat 位置")
 			.setDesc(
-				"通常自动找到。只有找不到时才填写程序的完整路径。账号在 md2wechat 中管理。",
+				"自动查找失败时，填写程序的完整路径。",
 			)
 			.addText((text) =>
 				text
@@ -332,7 +332,7 @@ class PublishingSettings extends PluginSettingTab {
 			.setName("创作助手")
 			.setDesc(
 				this.plugin.settings.agent
-					? `已选择 ${this.plugin.settings.agent === "codex" ? "Codex" : "Claude Code"}。文章原文不会被修改。`
+					? `已选择 ${this.plugin.settings.agent === "codex" ? "Codex" : "Claude Code"}`
 					: "选择已安装的 AI 工具，用于智能增强、标题与润色。",
 			)
 			.addButton((button) =>
@@ -342,6 +342,6 @@ class PublishingSettings extends PluginSettingTab {
 			);
 		new Setting(this.containerEl)
 			.setName("图片保存位置")
-			.setDesc("跟随 Obsidian 附件设置。选中的图片自动保存，原文不变。");
+			.setDesc("跟随 Obsidian 附件设置。");
 	}
 }

@@ -1,3 +1,4 @@
+import { titleStyles } from "../creation/title-request";
 import { CoverCropModal } from "./cover-crop-modal";
 import {
 	Modal,
@@ -109,9 +110,7 @@ export class AgentConnectModal extends CreationModal {
 		await this.action(async () => {
 			const agents = await discoverAgents();
 			if (this.closed) return;
-			this.feedback.setText(
-				"选择一个工具进行连接测试。测试会发送一句问候，不读取文章；可能消耗工具额度。",
-			);
+			this.feedback.setText("连接测试可能消耗少量额度。");
 			for (const agent of agents)
 				new Setting(this.contentEl)
 					.setName(agent.name)
@@ -186,7 +185,7 @@ abstract class BatchModal extends CreationModal {
 		this.list.empty();
 		if (!batches.length) {
 			this.list.createEl("p", {
-				text: "还没有候选。生成后可在这里选择。",
+				text: "暂无候选",
 			});
 			return;
 		}
@@ -194,7 +193,7 @@ abstract class BatchModal extends CreationModal {
 			? this.viewedBatch!
 			: batches[batches.length - 1]!.id;
 		const holder = this.list.createDiv();
-		new Setting(holder).setName("候选批次").addDropdown((drop) => {
+		new Setting(holder).setName("批次").addDropdown((drop) => {
 			batches.forEach((batch, index) =>
 				drop.addOption(
 					batch.id,
@@ -217,16 +216,15 @@ export class TitlesModal extends BatchModal {
 	private generateButton?: HTMLButtonElement;
 	async onOpen() {
 		this.begin("选择发布标题");
-		this.feedback.setText("选择即保存，仅用于发布标题，原文保持不变。");
-		let hook = 3;
-		new Setting(this.contentEl).setName("标题风格").addDropdown((drop) =>
-			drop
-				.addOption("3", "清楚克制")
-				.addOption("7", "更有吸引力")
-				.onChange((v) => {
-					hook = Number(v);
-				}),
-		);
+		this.feedback.setText("选中的标题将用于创建草稿。");
+		let hook = titleStyles[0].value;
+		new Setting(this.contentEl).setName("标题风格").addDropdown((drop) => {
+			for (const style of titleStyles)
+				drop.addOption(String(style.value), style.label);
+			drop.onChange((value) => {
+				hook = Number(value);
+			});
+		});
 		this.generateButton = this.controls("生成一批标题", async () => {
 			this.feedback.setText("正在生成标题…");
 			this.state = await this.plugin.creation.titles(
@@ -236,7 +234,7 @@ export class TitlesModal extends BatchModal {
 			);
 			if (this.closed) return;
 			await this.render();
-			this.feedback.setText("新候选已保存，原有选择仍保留。");
+			this.feedback.setText("");
 		});
 		this.list = this.contentEl.createDiv();
 		await this.action(async () => {
@@ -282,9 +280,7 @@ export class TitlesModal extends BatchModal {
 									item.id,
 								);
 							this.plugin.refresh();
-							this.feedback.setText(
-								"标题已保存，创建草稿时会自动带入。",
-							);
+							this.feedback.setText("");
 						} finally {
 							await this.render();
 						}
@@ -318,9 +314,7 @@ export class CoversModal extends BatchModal {
 	private generateButton?: HTMLButtonElement;
 	async onOpen() {
 		this.begin("选择封面");
-		this.feedback.setText(
-			"选择后自动保存到附件位置并用于发布，不会插入正文。",
-		);
+		this.feedback.setText("");
 		this.controls(
 			"选择已有图片",
 			async () => {
@@ -333,7 +327,7 @@ export class CoversModal extends BatchModal {
 							);
 						this.plugin.refresh();
 						await this.render();
-						this.feedback.setText("已有图片已设为封面。");
+						this.feedback.setText("已设为封面");
 					});
 				}).open();
 			},
@@ -388,7 +382,7 @@ export class CoversModal extends BatchModal {
 				});
 			});
 			generation.createEl("p", {
-				text: "每次生成 2 张，会向生图服务发送文章内容，可能产生费用。失败不会自动重试。",
+				text: "每次生成 2 张，将发送文章内容，可能产生费用。",
 			});
 			new Setting(generation).addButton((button) => {
 				this.generateButton = button.buttonEl;
@@ -477,7 +471,7 @@ export class CoversModal extends BatchModal {
 							if (this.closed) return;
 							await this.load();
 							await this.render();
-							this.feedback.setText("裁剪封面已保存。");
+							this.feedback.setText("已设为封面");
 						},
 					).open();
 				});
@@ -503,9 +497,7 @@ export class CoversModal extends BatchModal {
 									item.id,
 								);
 							this.plugin.refresh();
-							this.feedback.setText(
-								"封面已保存，创建草稿时会自动带入。",
-							);
+							this.feedback.setText("");
 						} finally {
 							await this.render();
 						}
@@ -515,7 +507,7 @@ export class CoversModal extends BatchModal {
 		});
 		if (this.state.coverPath) {
 			this.list.createEl("p", {
-				text: `当前封面：${this.state.coverPath}`,
+				text: `当前封面：${this.state.coverPath.split("/").pop()}`,
 			});
 			const chosen = this.app.vault.getAbstractFileByPath(
 				this.state.coverPath,
@@ -540,13 +532,11 @@ export class DraftReviewModal extends CreationModal {
 	}
 	async onOpen() {
 		this.begin(
-			`查看候选成稿 · ${this.candidate.request.sourcePath.split("/").pop()?.replace(/\.md$/i, "")}`,
+			`排版预览 · ${this.candidate.request.sourcePath.split("/").pop()?.replace(/\.md$/i, "")}`,
 		);
-		this.feedback.setText(
-			"仅调整公众号成稿，原文不变。确认采用前保留当前成稿。",
-		);
+		this.feedback.setText("采用后更新公众号成稿，不修改笔记。");
 		const before = this.contentEl.createEl("details");
-		before.createEl("summary", { text: "查看调整前内容" });
+		before.createEl("summary", { text: "查看调整前" });
 		const beforeBody = before.createDiv();
 		if (this.candidate.changes.length) {
 			const list = this.contentEl.createEl("ul");
@@ -616,7 +606,7 @@ export class DraftReviewModal extends CreationModal {
 								b.setDisabled(true);
 								try {
 									await this.plugin.creation.adopt(c);
-									new Notice("成稿已采用，原文未改动");
+									new Notice("已采用");
 									this.close();
 								} finally {
 									b.setDisabled(false);
@@ -636,7 +626,7 @@ export class PolishModal extends CreationModal {
 	}
 	onOpen() {
 		this.begin("润色公众号成稿");
-		this.feedback.setText("先比较效果，再决定是否采用。原文不会改动。");
+		this.feedback.setText("");
 		let style = "清楚简洁",
 			custom = "";
 		new Setting(this.contentEl).setName("润色方向").addDropdown((d) =>
@@ -678,15 +668,13 @@ export class ParagraphModal extends CreationModal {
 	}
 	async onOpen() {
 		this.begin("改善段落展示");
-		this.feedback.setText(
-			"选择一段内容，查看适合它的展示方式。文字保持不变。",
-		);
+		this.feedback.setText("");
 		await this.action(async () => {
 			const ctx = await this.plugin.creation.content(this.sourcePath);
 			if (this.closed) return;
 			const blocks = layoutBlocks(ctx.markdown);
 			if (!blocks.length) {
-				this.feedback.setText("目前没有适合单独调整的普通段落。");
+				this.feedback.setText("暂无可调整的段落");
 				return;
 			}
 			for (const block of blocks) {
@@ -751,11 +739,7 @@ export class ChangesModal extends CreationModal {
 		await this.action(async () => {
 			const changes = await this.plugin.creation.changes(this.result);
 			if (this.closed) return;
-			this.feedback.setText(
-				changes.length
-					? "可恢复普通段落，或查看另一种展示效果。"
-					: "这份成稿没有已记录的展示调整。",
-			);
+			this.feedback.setText(changes.length ? "" : "暂无排版调整");
 			for (const change of changes) {
 				const section = this.contentEl.createDiv();
 				section.createEl("p", { text: change.reason });
