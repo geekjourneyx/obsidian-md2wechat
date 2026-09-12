@@ -1,4 +1,6 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
 	runProcess,
@@ -50,7 +52,7 @@ describe("isolated text generation", () => {
 			await runProcess(
 				process.execPath,
 				["-e", "process.stdin.pipe(process.stdout)"],
-				{ cwd: "/private/tmp", input: "正文" },
+				{ cwd: tmpdir(), input: "正文" },
 			),
 		).toBe("正文");
 	});
@@ -59,13 +61,13 @@ describe("isolated text generation", () => {
 		const pending = runProcess(
 			process.execPath,
 			["-e", "setInterval(()=>{},1000)"],
-			{ cwd: "/private/tmp", signal: controller.signal },
+			{ cwd: tmpdir(), signal: controller.signal },
 		);
 		controller.abort();
 		await expect(pending).rejects.toThrow("取消");
 		await expect(
 			runProcess(process.execPath, [], {
-				cwd: "/private/tmp",
+				cwd: tmpdir(),
 				signal: controller.signal,
 			}),
 		).rejects.toThrow("取消");
@@ -78,14 +80,14 @@ describe("isolated text generation", () => {
 					"-e",
 					'const b=Buffer.from("中文");process.stdout.write(b.subarray(0,1));setTimeout(()=>process.stdout.write(b.subarray(1)),20)',
 				],
-				{ cwd: "/private/tmp" },
+				{ cwd: tmpdir() },
 			),
 		).toBe("中文");
 	});
 	it("bounds time and output", async () => {
 		await expect(
 			runProcess(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
-				cwd: "/private/tmp",
+				cwd: tmpdir(),
 				timeoutMs: 40,
 			}),
 		).rejects.toThrow("超时");
@@ -93,17 +95,17 @@ describe("isolated text generation", () => {
 			runProcess(
 				process.execPath,
 				["-e", 'process.stdout.write("x".repeat(10000))'],
-				{ cwd: "/private/tmp", maxOutput: 100 },
+				{ cwd: tmpdir(), maxOutput: 100 },
 			),
 		).rejects.toThrow("过长");
 	});
 	it("cancellation also terminates spawned descendants", async () => {
-		const marker = `/private/tmp/md2wechat-agent-descendant-${process.pid}.pid`;
+		const marker = join(tmpdir(), `md2wechat-agent-descendant-${process.pid}.pid`);
 		rmSync(marker, { force: true });
 		const controller = new AbortController();
 		const script = `const {spawn}=require('child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});require('fs').writeFileSync(${JSON.stringify(marker)},String(c.pid));setInterval(()=>{},1000)`;
 		const pending = runProcess(process.execPath, ["-e", script], {
-			cwd: "/private/tmp",
+			cwd: tmpdir(),
 			signal: controller.signal,
 		});
 		const failure = pending.catch((e) => e);
@@ -122,7 +124,7 @@ describe("isolated text generation", () => {
 			runProcess(
 				process.execPath,
 				["-e", 'console.error("secret-key");process.exit(1)'],
-				{ cwd: "/private/tmp" },
+				{ cwd: tmpdir() },
 			),
 		).rejects.toThrow("连接失败");
 	});
