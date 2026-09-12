@@ -10,6 +10,7 @@ export type SourceAsset = {
 	alt?: string;
 };
 export type StageInput = {
+	sourceMarkdown?: string;
 	markdown: string;
 	sourcePath: string;
 	assets: readonly SourceAsset[];

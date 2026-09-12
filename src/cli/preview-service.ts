@@ -9,25 +9,38 @@ export async function renderPreview(
 	markdown: string,
 	theme: string,
 	fontSize = "medium",
+	signal?: AbortSignal,
 ): Promise<ResultFiles> {
 	const files = {
-		markdown: join(request.workDir, "formatted.md"),
+		markdown: join(request.workDir, "layout.md"),
 		preview: join(request.workDir, "preview.html"),
 		response: join(request.workDir, "preview-response.json"),
 	};
 	await writeFile(files.markdown, markdown, { flag: "wx", mode: 0o600 });
-	completed(await runner.run(["inspect", files.markdown, "--json"]));
-	const response = await runner.run<{ output_file: string }>([
-		"preview",
-		files.markdown,
-		"--theme",
-		theme,
-		"--font-size",
-		fontSize,
-		"--output",
-		files.preview,
-		"--json",
-	]);
+	if (/^:::/m.test(markdown))
+		completed(
+			await runner.run(
+				["layout", "validate", "--file", files.markdown, "--json"],
+				{ signal },
+			),
+		);
+	completed(
+		await runner.run(["inspect", files.markdown, "--json"], { signal }),
+	);
+	const response = await runner.run<{ output_file: string }>(
+		[
+			"preview",
+			files.markdown,
+			"--theme",
+			theme,
+			"--font-size",
+			fontSize,
+			"--output",
+			files.preview,
+			"--json",
+		],
+		{ signal },
+	);
 	const data = completed(response);
 	if (
 		resolve(data.output_file) !== files.preview ||

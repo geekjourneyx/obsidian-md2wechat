@@ -1,3 +1,4 @@
+import type { LayoutChange } from "../creation/layout-engine";
 import { createHash, randomUUID } from "node:crypto";
 import {
 	mkdir,
@@ -5,6 +6,7 @@ import {
 	writeFile,
 	rename,
 	realpath,
+	readdir,
 	stat,
 	rm,
 } from "node:fs/promises";
@@ -26,6 +28,7 @@ export type Capture = {
 	assets: readonly StagedAsset[];
 };
 export type Result = {
+	changes?: LayoutChange[];
 	schemaVersion: 1;
 	id: string;
 	requestId: string;
@@ -41,11 +44,17 @@ export type Result = {
 	createdAt: number;
 };
 export type ResultFiles = {
+	changes?: LayoutChange[];
 	markdown: string;
 	preview: string;
 	response: string;
 };
-type Index = { latest?: string; current?: string; previous?: string };
+type Index = {
+	sourcePath?: string;
+	latest?: string;
+	current?: string;
+	previous?: string;
+};
 export async function atomicJSON(file: string, data: unknown) {
 	const temp = `${file}.${randomUUID()}.tmp`;
 	await writeFile(temp, JSON.stringify(data), { flag: "wx", mode: 0o600 });
@@ -115,7 +124,9 @@ export function createResultStore(root: string) {
 						schemaVersion: 1,
 						requestId,
 						sourcePath: input.sourcePath,
-						sourceHash: hash(input.markdown),
+						sourceHash: hash(
+							input.sourceMarkdown ?? input.markdown,
+						),
 						...staged,
 						assets: staged.bindings,
 					};
@@ -130,6 +141,7 @@ export function createResultStore(root: string) {
 					await atomicJSON(indexFile(input.sourcePath), {
 						...index,
 						latest: requestId,
+						sourcePath: input.sourcePath,
 					});
 					return captured;
 				},
@@ -260,12 +272,13 @@ export function createResultStore(root: string) {
 						});
 					}
 					const result: Result = {
+						changes: files.changes ?? [],
 						schemaVersion: 1,
 						id: resultId,
 						requestId: id,
 						sourcePath: captured.sourcePath,
 						sourceHash: captured.sourceHash,
-						markdownFile: join(directory, "formatted.md"),
+						markdownFile: join(directory, "layout.md"),
 						markdownHash: hash(markdown),
 						htmlFile: join(directory, "preview.html"),
 						htmlHash: hash(html),
@@ -292,7 +305,7 @@ export function createResultStore(root: string) {
 						flag: "wx",
 						mode: 0o600,
 					});
-					result.markdownFile = join(finalDirectory, "formatted.md");
+					result.markdownFile = join(finalDirectory, "layout.md");
 					result.htmlFile = join(finalDirectory, "preview.html");
 					result.previewResponseFile = join(
 						finalDirectory,
@@ -329,16 +342,136 @@ export function createResultStore(root: string) {
 						: "source_changed",
 			};
 		},
+		async restorePrevious(sourcePath: string, currentMarkdown: string) {
+			await init();
+			await withLock(
+				join(root, `source-${key(sourcePath)}.lock`),
+				async () => {
+					const index = await optionalJSON<Index>(
+						indexFile(sourcePath),
+					);
+					if (!index?.previous) throw new Error("没有可撤回的排版");
+					if (!/^[a-f0-9]{64}$/.test(index.previous))
+						throw new Error("之前的排版记录不正确");
+					const directory = join(root, "results", index.previous);
+					const previous = await optionalJSON<Result>(
+						join(directory, "result.json"),
+					);
+					if (!previous || previous.id !== index.previous)
+						throw new Error("之前的排版已不存在");
+					const markdown = await checkedFile(
+						previous.markdownFile,
+						directory,
+						10 * 1024 * 1024,
+					);
+					const html = await checkedFile(
+						previous.htmlFile,
+						directory,
+						20 * 1024 * 1024,
+					);
+					if (
+						hash(markdown) !== previous.markdownHash ||
+						hash(html) !== previous.htmlHash
+					)
+						throw new Error("之前的排版已被改动，无法撤回");
+					for (const asset of previous.assets) {
+						const bytes = await checkedFile(
+							asset.localFile,
+							directory,
+							20 * 1024 * 1024,
+						);
+						if (hash(bytes) !== asset.sha256)
+							throw new Error(
+								"之前排版中的图片已被改动，无法撤回",
+							);
+					}
+					await atomicJSON(indexFile(sourcePath), {
+						current: index.previous,
+						previous: index.current,
+					});
+				},
+			);
+			return this.current(sourcePath, currentMarkdown);
+		},
+		async sourcePaths(): Promise<string[]> {
+			const paths = new Set<string>();
+			for (const file of await readdir(join(root, "index")).catch(
+				() => [] as string[],
+			)) {
+				if (!/^[a-f0-9]{64}\.json$/.test(file)) continue;
+				const index = await optionalJSON<Index>(
+					join(root, "index", file),
+				);
+				if (!index) continue;
+				let source = index.sourcePath;
+				if (!source && index.current)
+					source = (
+						await optionalJSON<Result>(
+							join(root, "results", index.current, "result.json"),
+						)
+					)?.sourcePath;
+				if (!source && index.latest)
+					source = (await request(index.latest)).sourcePath;
+				if (source && file === key(source) + ".json") paths.add(source);
+			}
+			return [...paths];
+		},
+		async canRenameSource(oldPath: string, newPath: string) {
+			if (oldPath === newPath) return;
+			if (await optionalJSON<Index>(indexFile(newPath)))
+				throw new Error("目标文章已有排版记录，不能覆盖");
+		},
 		async renameSource(oldPath: string, newPath: string) {
 			await init();
-			const index = await optionalJSON<Index>(indexFile(oldPath));
-			if (index) {
-				await atomicJSON(indexFile(newPath), {
-					...index,
-					latest: undefined,
-				});
-				await rm(indexFile(oldPath));
-			}
+			if (oldPath === newPath) return;
+			const locks = [key(oldPath), key(newPath)].sort();
+			await withLock(join(root, `source-${locks[0]}.lock`), () =>
+				withLock(join(root, `source-${locks[1]}.lock`), async () => {
+					const index = await optionalJSON<Index>(indexFile(oldPath));
+					if (!index) return;
+					if (await optionalJSON<Index>(indexFile(newPath)))
+						throw new Error("目标文章已有排版记录，不能覆盖");
+					const backups: Array<{ file: string; result: Result }> = [];
+					for (const id of await readdir(join(root, "results"))) {
+						if (!/^[a-f0-9]{64}$/.test(id)) continue;
+						const file = join(root, "results", id, "result.json");
+						const result = await optionalJSON<Result>(file);
+						if (result?.sourcePath === oldPath)
+							backups.push({ file, result });
+					}
+					try {
+						await atomicJSON(indexFile(newPath), {
+							...index,
+							latest: undefined,
+							sourcePath: newPath,
+						});
+						for (const item of backups)
+							await atomicJSON(item.file, {
+								...item.result,
+								sourcePath: newPath,
+							});
+						await rm(indexFile(oldPath));
+					} catch (error) {
+						let restoreFailed = false;
+						for (const item of backups)
+							try {
+								await atomicJSON(item.file, item.result);
+							} catch {
+								restoreFailed = true;
+							}
+						try {
+							await rm(indexFile(newPath), { force: true });
+						} catch {
+							restoreFailed = true;
+						}
+						if (restoreFailed)
+							throw new Error(
+								"记录移动失败且部分记录未恢复，请保留现有文件并检查存储权限。",
+							);
+						throw error;
+					}
+				}),
+			);
 		},
 	};
 }

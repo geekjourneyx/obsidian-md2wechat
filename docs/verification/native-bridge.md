@@ -1,3 +1,5 @@
+> 历史记录：本文保留 2.0 阶段的设计或验收，不作为 2.1 当前操作指南；当前说明见 README、INSTALL 与 docs/FIRST-RUN.md。
+
 > 历史设计/验收记录，保留当时上下文。2.0 当前安装、配置和使用方法以 README.md、INSTALL.md 和 CHANGELOG.md 为准。
 
 # 官方接力验证

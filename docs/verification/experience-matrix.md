@@ -1,3 +1,5 @@
+> 历史记录：本文保留 2.0 阶段的设计或验收，不作为 2.1 当前操作指南；当前说明见 README、INSTALL 与 docs/FIRST-RUN.md。
+
 > 2.0 发布验收档案：按时间追加，早期候选版状态由后续实测记录覆盖。当前范围见 README 与 AGENT-COMPATIBILITY。
 
 # 候选版验证记录

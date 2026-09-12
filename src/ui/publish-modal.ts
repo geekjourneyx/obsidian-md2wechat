@@ -11,6 +11,7 @@ import type Md2WechatPlugin from "../../main";
 import { hash, type Result } from "../results/result-store";
 import { CatalogService, type Account } from "../cli/catalog-service";
 import { createConfirmedDraft } from "../publish/draft-service";
+import { selectedTitle } from "../creation/creation-store";
 export class PublishModal extends Modal {
 	constructor(
 		private plugin: Md2WechatPlugin,
@@ -52,9 +53,39 @@ export class PublishModal extends Modal {
 				digest = metadata.digest.value as string,
 				coverFile = "",
 				coverHash = "";
+			const choices = this.plugin.creationStore
+				? await this.plugin.creationStore.read(this.result.sourcePath)
+				: undefined;
+			if (choices) title = selectedTitle(choices) ?? title;
+			if (choices?.coverPath) {
+				const selected = this.app.vault.getAbstractFileByPath(
+					choices.coverPath,
+				);
+				if (selected instanceof TFile) {
+					coverFile = (
+						this.app.vault.adapter as FileSystemAdapter
+					).getFullPath(selected.path);
+					coverHash = hash(await readFile(coverFile));
+				}
+			}
 			let busy = false;
+			const selectedTitleBatch = choices?.titles.find((b) =>
+				b.items.some((i) => i.id === choices.selectedTitle),
+			);
+			const selectedCoverBatch = choices?.covers.find((b) =>
+				b.items.some((i) => i.id === choices.selectedCover),
+			);
+			if (
+				[selectedTitleBatch, selectedCoverBatch].some(
+					(b) => b && b.sourceHash !== this.result.sourceHash,
+				)
+			) {
+				content.createEl("p", {
+					text: "标题或封面根据旧版文章生成，请核对。",
+				});
+			}
 			feedback.setText(
-				"创建到公众号草稿箱，仍可在公众号后台继续编辑。不会直接发布。",
+				"确认后上传到公众号草稿箱，不会发布。",
 			);
 			new Setting(content).setName("公众号").addDropdown((drop) => {
 				drop.addOption("", "选择公众号");
@@ -95,34 +126,42 @@ export class PublishModal extends Modal {
 				cls: "md2w-cover",
 				attr: { alt: "草稿封面" },
 			});
-			coverPreview.hidden = true;
+			coverPreview.hidden = !coverFile;
+			if (coverFile) {
+				const bytes = await readFile(coverFile);
+				coverPreview.src = `data:image/${coverFile.toLowerCase().endsWith(".png") ? "png" : "jpeg"};base64,${bytes.toString("base64")}`;
+			}
 			new Setting(content)
 				.setName("封面")
-				.setDesc("选择笔记库中的图片，最终确认后才会上传。")
 				.addButton((button) =>
-					button.setButtonText("选择封面").onClick(() =>
-						new CoverPicker(this.plugin, async (file) => {
-							try {
-								const selected = (
-									this.app.vault.adapter as FileSystemAdapter
-								).getFullPath(file.path);
-								const bytes = await readFile(selected);
-								if (bytes.length > 20 * 1024 * 1024)
-									throw new Error(
-										"封面超过 20 MB，请选择较小的图片",
+					button
+						.setButtonText(coverFile ? "更换封面" : "选择封面")
+						.onClick(() =>
+							new CoverPicker(this.plugin, async (file) => {
+								try {
+									const selected = (
+										this.app.vault
+											.adapter as FileSystemAdapter
+									).getFullPath(file.path);
+									const bytes = await readFile(selected);
+									if (bytes.length > 20 * 1024 * 1024)
+										throw new Error(
+											"封面超过 20 MB，请选择较小的图片",
+										);
+									coverFile = selected;
+									coverHash = hash(bytes);
+									coverPreview.src = `data:image/${file.extension.replace("jpg", "jpeg")};base64,${bytes.toString("base64")}`;
+									coverPreview.hidden = false;
+									button.setButtonText(file.name);
+								} catch (e) {
+									feedback.setText(
+										e instanceof Error
+											? e.message
+											: String(e),
 									);
-								coverFile = selected;
-								coverHash = hash(bytes);
-								coverPreview.src = `data:image/${file.extension.replace("jpg", "jpeg")};base64,${bytes.toString("base64")}`;
-								coverPreview.hidden = false;
-								button.setButtonText(file.name);
-							} catch (e) {
-								feedback.setText(
-									e instanceof Error ? e.message : String(e),
-								);
-							}
-						}).open(),
-					),
+								}
+							}).open(),
+						),
 				);
 			const actions = new Setting(content);
 			actions.addButton((button) =>
@@ -163,6 +202,7 @@ export class PublishModal extends Modal {
 								this.plugin.root,
 								{
 									resultId: this.result.id,
+									sourcePath: this.result.sourcePath,
 									sourceHash: this.result.sourceHash,
 									htmlFile: this.result.htmlFile,
 									htmlHash: this.result.htmlHash,
