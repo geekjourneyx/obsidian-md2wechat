@@ -68,7 +68,7 @@ test("article history survives new previews and stays separate from other docume
 	expect(
 		(await articleDraft(root, { ...current, id: "old" }, "account"))
 			?.current,
-	).toBe(true);
+	).toBe(false);
 	expect(
 		(
 			await articleDraft(

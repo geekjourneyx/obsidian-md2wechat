@@ -1,3 +1,4 @@
+import { cliEnvironment } from "./environment";
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import type {
 	CliEnvelope,
@@ -67,7 +68,10 @@ function spawnProcess(
 	args: readonly string[],
 	options: { shell: false },
 ): ChildProcess {
-	return nodeSpawn(executable, [...args], options);
+	return nodeSpawn(executable, [...args], {
+		...options,
+		env: cliEnvironment(executable),
+	});
 }
 
 function runnerFailure(code: string, message: string): CliFailureEnvelope {

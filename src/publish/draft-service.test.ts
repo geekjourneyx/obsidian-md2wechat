@@ -127,3 +127,118 @@ it("allows only one concurrent confirmation across independent callers", async (
 	]);
 	expect(calls.filter((c) => c[0] === "create_draft")).toHaveLength(1);
 });
+it("creates a newly reviewed title but deduplicates that exact metadata", async () => {
+	const draft = await input();
+	await createConfirmedDraft(root, draft, runner(), async () => hash("原文"));
+	const changed = { ...draft, title: "新标题" };
+	expect(
+		(
+			await createConfirmedDraft(root, changed, runner(), async () =>
+				hash("原文"),
+			)
+		).kind,
+	).toBe("completed");
+	await createConfirmedDraft(root, changed, runner(), async () =>
+		hash("原文"),
+	);
+	expect(calls.filter((c) => c[0] === "create_draft")).toHaveLength(2);
+});
+it("keeps uncertain attempts blocked even across metadata and layout changes", async () => {
+	const draft = { ...(await input()), sourcePath: "article.md" };
+	await createConfirmedDraft(root, draft, runner(true), async () =>
+		hash("原文"),
+	);
+	const result = await createConfirmedDraft(
+		root,
+		{ ...draft, resultId: "result-2", title: "新标题" },
+		runner(),
+		async () => hash("原文"),
+	);
+	expect(result.kind).toBe("unknown");
+	expect(calls.filter((c) => c[0] === "create_draft")).toHaveLength(1);
+});
+it.each(["author", "digest", "coverHash"] as const)(
+	"treats changed %s as a new reviewed publication",
+	async (field) => {
+		const draft = await input();
+		await createConfirmedDraft(root, draft, runner(), async () =>
+			hash("原文"),
+		);
+		const changed = { ...draft, [field]: "changed" };
+		if (field === "coverHash") {
+			await writeFile(draft.coverFile, "new cover");
+			changed.coverHash = hash("new cover");
+		}
+		expect(
+			(
+				await createConfirmedDraft(root, changed, runner(), async () =>
+					hash("原文"),
+				)
+			).kind,
+		).toBe("completed");
+		expect(calls.filter((c) => c[0] === "create_draft")).toHaveLength(2);
+	},
+);
+it("preserves legacy completed receipts without blindly creating again", async () => {
+	const { mkdir } = await import("node:fs/promises");
+	const draft = await input();
+	await mkdir(join(root, "attempts"));
+	await writeFile(
+		join(
+			root,
+			"attempts",
+			hash(`${draft.resultId}:${draft.account.appid}`) + ".json",
+		),
+		JSON.stringify({ state: "completed", mediaId: "old" }),
+	);
+	expect(
+		(
+			await createConfirmedDraft(root, draft, runner(), async () =>
+				hash("原文"),
+			)
+		).kind,
+	).toBe("blocked");
+	expect(calls).toHaveLength(0);
+});
+it("records metadata identity durably and discovers the resulting draft history", async () => {
+	const { readdir } = await import("node:fs/promises");
+	const { completedDraft } = await import("./draft-link");
+	const draft = { ...(await input()), sourcePath: "article.md" };
+	await createConfirmedDraft(root, draft, runner(), async () => hash("原文"));
+	const name = (await readdir(join(root, "attempts"))).find((n) =>
+		n.endsWith(".json"),
+	)!;
+	const receipt = JSON.parse(
+		await readFile(join(root, "attempts", name), "utf8"),
+	);
+	expect(receipt).toMatchObject({
+		resultId: draft.resultId,
+		appid: draft.account.appid,
+		sourcePath: "article.md",
+		state: "completed",
+	});
+	expect(receipt.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+	expect(receipt.createdAt).toBeGreaterThan(0);
+	expect(
+		await completedDraft(root, draft.resultId, draft.account.appid),
+	).not.toBeNull();
+});
+it("does not bypass an unreadable receipt by changing publication metadata", async () => {
+	const { readdir } = await import("node:fs/promises");
+	const draft = await input();
+	await createConfirmedDraft(root, draft, runner(true), async () =>
+		hash("原文"),
+	);
+	const name = (await readdir(join(root, "attempts"))).find((n) =>
+		n.endsWith(".json"),
+	)!;
+	await writeFile(join(root, "attempts", name), "{corrupted");
+	const result = await createConfirmedDraft(
+		root,
+		{ ...draft, title: "另一个标题" },
+		runner(),
+		async () => hash("原文"),
+	);
+	expect(result.kind).toBe("blocked");
+	expect(calls.filter((c) => c[0] === "create_draft")).toHaveLength(1);
+});

@@ -15,78 +15,147 @@ export function draftLink(value?: string) {
 	} catch {}
 	return { url: "https://mp.weixin.qq.com/", label: "打开公众号后台" };
 }
+export type DraftReceipt = {
+	state: "started" | "unknown" | "completed";
+	mediaId?: string;
+	draftUrl?: string;
+	resultId: string;
+	appid: string;
+	fingerprint?: string;
+	sourcePath?: string;
+	createdAt: number;
+};
+export async function relatedResults(
+	root: string,
+	resultId: string,
+	sourcePath?: string,
+): Promise<string[]> {
+	const ids = new Set([resultId]);
+	if (sourcePath)
+		for (const id of await readdir(join(root, "results")).catch(
+			() => [] as string[],
+		)) {
+			try {
+				const data = JSON.parse(
+					await readFile(
+						join(root, "results", id, "result.json"),
+						"utf8",
+					),
+				);
+				if (data.sourcePath === sourcePath) ids.add(id);
+			} catch {
+				/* incomplete result */
+			}
+		}
+	return [...ids];
+}
+/** Only recognize known receipt names and explicit article/account identities. */
+export async function readDraftReceipts(
+	root: string,
+	resultIds: string[],
+	appid: string,
+	sourcePath?: string,
+	strict = false,
+): Promise<DraftReceipt[]> {
+	const folder = join(root, "attempts");
+	const receipts: DraftReceipt[] = [];
+	const legacy = new Map(
+		resultIds.map((id) => [hash(`${id}:${appid}`) + ".json", id]),
+	);
+	for (const name of await readdir(folder).catch(() => [] as string[])) {
+		if (!/^[a-f0-9]{64}\.json$/.test(name)) continue;
+		try {
+			const value = JSON.parse(
+				await readFile(join(folder, name), "utf8"),
+			);
+			if (!["started", "unknown", "completed"].includes(value.state)) {
+				if (strict)
+					throw new Error(
+						"创建记录无法读取，请先核对公众号草稿箱，避免重复创建。",
+					);
+				continue;
+			}
+			const oldId = legacy.get(name);
+			if (oldId)
+				receipts.push({
+					...value,
+					resultId: oldId,
+					appid,
+					fingerprint: undefined,
+					createdAt: (await stat(join(folder, name))).mtimeMs,
+				});
+			else if (
+				typeof value.resultId === "string" &&
+				value.appid === appid &&
+				typeof value.fingerprint === "string" &&
+				/^[a-f0-9]{64}$/.test(value.fingerprint) &&
+				name ===
+					hash(`${value.resultId}:${appid}:${value.fingerprint}`) +
+						".json" &&
+				(resultIds.includes(value.resultId) ||
+					(sourcePath !== undefined &&
+						value.sourcePath === sourcePath))
+			) {
+				receipts.push({
+					...value,
+					createdAt: Number.isFinite(value.createdAt)
+						? value.createdAt
+						: (await stat(join(folder, name))).mtimeMs,
+				});
+			}
+		} catch {
+			if (strict)
+				throw new Error(
+					"创建记录无法读取，请先核对公众号草稿箱，避免重复创建。",
+				);
+			/* invalid or incomplete receipt is not evidence of completion */
+		}
+	}
+	return receipts;
+}
 export async function completedDraft(
 	root: string,
 	resultId: string,
 	appid: string,
 ) {
-	try {
-		const value = JSON.parse(
-			await readFile(
-				join(root, "attempts", hash(`${resultId}:${appid}`) + ".json"),
-				"utf8",
-			),
-		);
-		return value.state === "completed" && value.mediaId
-			? draftLink(value.draftUrl)
-			: null;
-	} catch {
-		return null;
-	}
+	const receipts = await readDraftReceipts(root, [resultId], appid);
+	const value = receipts
+		.filter(
+			(r) =>
+				r.state === "completed" &&
+				typeof r.mediaId === "string" &&
+				r.mediaId.trim(),
+		)
+		.sort((a, b) => b.createdAt - a.createdAt)[0];
+	return value ? draftLink(value.draftUrl) : null;
 }
 
-/** Read existing durable receipts; refreshing a preview must not erase article history. */
+/** Without selected metadata, a receipt proves only previous creation, never current synchronization. */
 export async function articleDraft(
 	root: string,
 	result: import("../results/result-store").Result,
 	appid: string,
 ) {
-	const candidates = [result];
-	for (const id of await readdir(join(root, "results")).catch(
-		() => [] as string[],
-	)) {
-		if (id === result.id) continue;
-		try {
-			const previous = JSON.parse(
-				await readFile(
-					join(root, "results", id, "result.json"),
-					"utf8",
-				),
-			);
-			if (previous.sourcePath === result.sourcePath)
-				candidates.push(previous);
-		} catch {
-			/* An incomplete result cannot establish publication history. */
-		}
-	}
-	const receipts = await Promise.all(
-		candidates.map(async (candidate) => {
-			const link = await completedDraft(root, candidate.id, appid);
-			if (!link) return null;
-			const info = await stat(
-				join(
-					root,
-					"attempts",
-					hash(`${candidate.id}:${appid}`) + ".json",
-				),
-			).catch(() => null);
-			return {
-				...link,
-				createdAt: info?.mtimeMs ?? 0,
-				current:
-					candidate.id === result.id && result.state === "current",
-			};
-		}),
+	const ids = await relatedResults(root, result.id, result.sourcePath);
+	const receipts = await readDraftReceipts(
+		root,
+		ids,
+		appid,
+		result.sourcePath,
 	);
-	return (
-		receipts
-			.filter(
-				(receipt): receipt is NonNullable<typeof receipt> => !!receipt,
-			)
-			.sort(
-				(a, b) =>
-					Number(b.current) - Number(a.current) ||
-					b.createdAt - a.createdAt,
-			)[0] ?? null
-	);
+	const value = receipts
+		.filter(
+			(r) =>
+				r.state === "completed" &&
+				typeof r.mediaId === "string" &&
+				r.mediaId.trim(),
+		)
+		.sort((a, b) => b.createdAt - a.createdAt)[0];
+	return value
+		? {
+				...draftLink(value.draftUrl),
+				createdAt: value.createdAt,
+				current: false,
+			}
+		: null;
 }

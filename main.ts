@@ -23,9 +23,14 @@ import { resolveAssets } from "./src/source/resolve-assets";
 import { createCliRunner, CliProcessRegistry } from "./src/cli/runner";
 import { CatalogService, locateCli } from "./src/cli/catalog-service";
 import { renderPreview } from "./src/cli/preview-service";
+import { createCreationStore } from "./src/creation/creation-store";
+import { CreationController } from "./src/creation/creation-controller";
+import { AgentConnectModal } from "./src/ui/creation-modals";
 export default class Md2WechatPlugin extends Plugin {
 	settings: Md2WechatSettings = DEFAULT_SETTINGS;
 	store!: ResultStore;
+	creationStore!: ReturnType<typeof createCreationStore>;
+	creation!: CreationController;
 	root = "";
 	private legacy: Record<string, unknown> = {};
 	private recent: MarkdownView | null = null;
@@ -50,6 +55,8 @@ export default class Md2WechatPlugin extends Plugin {
 			hash(vault.getBasePath()).slice(0, 24),
 		);
 		this.store = createResultStore(this.root);
+		this.creationStore = createCreationStore(join(this.root, "creation"));
+		this.creation = new CreationController(this);
 		this.registerView(
 			MD2WECHAT_VIEW_TYPE,
 			(leaf) => new Md2WechatView(leaf, this),
@@ -133,20 +140,32 @@ export default class Md2WechatPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("delete", () => this.refresh()));
 		this.registerEvent(
 			this.app.vault.on("rename", (file, old) => {
-				void this.store
-					.renameSource(old, file.path)
-					.then(() => {
+				const destination = file.path;
+				void import("./src/creation/rename-resources")
+					.then(async ({ renameResources, renamedPath }) => {
+						// The vault has already moved. Update views even when a record conflict requires attention.
 						for (const leaf of this.app.workspace.getLeavesOfType(
 							MD2WECHAT_VIEW_TYPE,
-						))
+						)) {
 							if (
 								leaf.view instanceof Md2WechatView &&
-								leaf.view.sourcePath === old
+								leaf.view.sourcePath
 							)
-								leaf.view.sourcePath = file.path;
-						this.refresh();
+								leaf.view.sourcePath = renamedPath(
+									leaf.view.sourcePath,
+									old,
+									destination,
+								);
+						}
+						await renameResources(
+							this.store,
+							this.creationStore,
+							old,
+							destination,
+						);
 					})
-					.catch((e) => new Notice(String(e)));
+					.catch((error) => new Notice(String(error)))
+					.finally(() => this.refresh());
 			}),
 		);
 		this.addSettingTab(new PublishingSettings(this.app, this));
@@ -310,9 +329,19 @@ class PublishingSettings extends PluginSettingTab {
 					}),
 			);
 		new Setting(this.containerEl)
-			.setName("使用你的 Agent")
+			.setName("创作助手")
 			.setDesc(
-				"在支持本地工具的 Agent 中安装随插件提供的 obsidian-md2wechat 技能。多个 Agent 可以同时使用，无需选择默认工具。",
+				this.plugin.settings.agent
+					? `已选择 ${this.plugin.settings.agent === "codex" ? "Codex" : "Claude Code"}。文章原文不会被修改。`
+					: "选择已安装的 AI 工具，用于智能增强、标题与润色。",
+			)
+			.addButton((button) =>
+				button
+					.setButtonText("连接或更换")
+					.onClick(() => new AgentConnectModal(this.plugin).open()),
 			);
+		new Setting(this.containerEl)
+			.setName("图片保存位置")
+			.setDesc("跟随 Obsidian 附件设置。选中的图片自动保存，原文不变。");
 	}
 }

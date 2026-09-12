@@ -503,3 +503,33 @@ describe("NodeCliRunner", () => {
 		expect(spawn).toHaveBeenCalledTimes(2);
 	});
 });
+
+test("starts npm-style CLIs with a minimal GUI PATH", async () => {
+	const { mkdtemp, writeFile, symlink, rm } =
+		await import("node:fs/promises");
+	const { join } = await import("node:path");
+	const { tmpdir } = await import("node:os");
+	const { createCliRunner } = await import("./runner");
+	const dir = await mkdtemp(join(tmpdir(), "cli-gui-"));
+	const previous = process.env.PATH;
+	process.env.PATH = "/usr/bin:/bin";
+	try {
+		await symlink(process.execPath, join(dir, "md2w-test-runtime"));
+		const file = join(dir, "md2wechat");
+		await writeFile(
+			file,
+			"#!/usr/bin/env md2w-test-runtime\nconsole.log(" +
+				JSON.stringify(JSON.stringify(success({ ready: true }))) +
+				");\n",
+			{ mode: 0o700 },
+		);
+		expect(
+			(await createCliRunner(file).run(["version", "--json"])).success,
+		).toBe(true);
+		expect(process.env.PATH).toBe("/usr/bin:/bin");
+	} finally {
+		if (previous === undefined) delete process.env.PATH;
+		else process.env.PATH = previous;
+		await rm(dir, { recursive: true, force: true });
+	}
+});

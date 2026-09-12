@@ -1,3 +1,4 @@
+import { readDraftReceipts, relatedResults } from "./draft-link";
 import { randomUUID } from "node:crypto";
 import { inspectionMarkdown } from "../source/resolve-assets";
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
@@ -7,6 +8,7 @@ import type { CliRunner } from "../cli/contracts";
 import { completed, type Account } from "../cli/catalog-service";
 import { imageTargets, replaceImageTargets } from "./asset-bindings";
 export type FrozenDraft = {
+	sourcePath?: string;
 	resultId: string;
 	sourceHash: string;
 	htmlFile: string;
@@ -28,7 +30,24 @@ export type DraftOutcome =
 	| { kind: "completed"; mediaId: string; draftUrl?: string }
 	| { kind: "blocked"; message: string }
 	| { kind: "unknown"; message: string };
+export function draftFingerprint(
+	input: Pick<FrozenDraft, "title" | "author" | "digest" | "coverHash">,
+): string {
+	return hash(
+		JSON.stringify([
+			input.title,
+			input.author,
+			input.digest,
+			input.coverHash,
+		]),
+	);
+}
 type Attempt = {
+	resultId: string;
+	appid: string;
+	fingerprint: string;
+	sourcePath?: string;
+	createdAt: number;
 	state: "started" | "completed" | "unknown";
 	mediaId?: string;
 	draftUrl?: string;
@@ -40,30 +59,73 @@ export async function createConfirmedDraft(
 	runner: CliRunner,
 	currentSourceHash: () => Promise<string>,
 ): Promise<DraftOutcome> {
-	const key = hash(`${input.resultId}:${input.account.appid}`);
+	const fingerprint = draftFingerprint(input);
+	const key = hash(`${input.resultId}:${input.account.appid}:${fingerprint}`);
+	let sourcePath = input.sourcePath;
+	if (!sourcePath)
+		try {
+			sourcePath = JSON.parse(
+				await readFile(
+					join(root, "results", input.resultId, "result.json"),
+					"utf8",
+				),
+			).sourcePath;
+		} catch {}
+	const lockKey = hash(
+		`${sourcePath ?? input.resultId}:${input.account.appid}`,
+	);
 	const folder = join(root, "attempts");
 	await mkdir(folder, { recursive: true, mode: 0o700 });
 	const record = join(folder, `${key}.json`);
 	try {
-		return await withLock(join(folder, `${key}.lock`), async () => {
-			let previous: Attempt | null = null;
-			try {
-				previous = JSON.parse(await readFile(record, "utf8"));
-			} catch (e) {
-				if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
-			}
+		return await withLock(join(folder, `${lockKey}.lock`), async () => {
+			const ids = await relatedResults(root, input.resultId, sourcePath);
+			const receipts = await readDraftReceipts(
+				root,
+				ids,
+				input.account.appid,
+				sourcePath,
+				true,
+			);
+			if (
+				receipts.some(
+					(r) =>
+						r.state !== "completed" ||
+						typeof r.mediaId !== "string" ||
+						!r.mediaId.trim(),
+				)
+			)
+				return {
+					kind: "unknown" as const,
+					message:
+						"上次创建结果尚未确认，请先到公众号草稿箱核对；本插件不会重复创建。",
+				};
+			if (
+				receipts.some(
+					(r) =>
+						r.resultId === input.resultId &&
+						!r.fingerprint &&
+						r.state === "completed",
+				)
+			)
+				return {
+					kind: "blocked" as const,
+					message:
+						"这份排版已有旧版创建记录，无法核对当时的标题和封面，请先到公众号草稿箱核对，避免重复创建。",
+				};
+			const previous = receipts.find(
+				(r) =>
+					r.resultId === input.resultId &&
+					r.fingerprint === fingerprint &&
+					r.state === "completed" &&
+					r.mediaId,
+			);
 			if (previous)
-				return previous.state === "completed" && previous.mediaId
-					? {
-							kind: "completed" as const,
-							mediaId: previous.mediaId,
-							draftUrl: previous.draftUrl,
-						}
-					: {
-							kind: "unknown" as const,
-							message:
-								"上次创建结果尚未确认，请先到公众号草稿箱核对；本插件不会重复创建。",
-						};
+				return {
+					kind: "completed" as const,
+					mediaId: previous.mediaId!,
+					draftUrl: previous.draftUrl,
+				};
 			const html = await readFile(input.htmlFile, "utf8");
 			const cover = await readFile(input.coverFile);
 			if (
@@ -158,7 +220,15 @@ export async function createConfirmedDraft(
 				await writeFile(file, asset.bytes, { flag: "wx", mode: 0o600 });
 				asset.file = file;
 			}
-			const attempt: Attempt = { state: "started", stage: "准备上传" };
+			const attempt: Attempt = {
+				resultId: input.resultId,
+				appid: input.account.appid,
+				fingerprint,
+				sourcePath,
+				createdAt: Date.now(),
+				state: "started",
+				stage: "准备上传",
+			};
 			await atomicJSON(record, attempt);
 			try {
 				const urls = new Map<string, string>();
@@ -226,6 +296,7 @@ export async function createConfirmedDraft(
 				)
 					throw new Error("创建未返回草稿编号");
 				await atomicJSON(record, {
+					...attempt,
 					state: "completed",
 					stage: "草稿已创建",
 					mediaId: draft.media_id,
