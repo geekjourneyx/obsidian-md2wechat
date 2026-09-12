@@ -14,6 +14,8 @@ mkdirSync(folder, { recursive: true });
 for (const name of ['main.js','manifest.json','styles.css','README.md','INSTALL.md','CHANGELOG.md','RELEASE.md','dev.md','LICENSE']) cpSync(name, join(folder,name));
 mkdirSync(join(folder,'docs'), { recursive: true });
 for (const name of ['FIRST-RUN.md','AGENT-COMPATIBILITY.md']) cpSync(join('docs',name),join(folder,'docs',name));
+cpSync('docs/verification', join(folder,'docs/verification'), { recursive: true });
+cpSync('assets/readme', join(folder,'assets/readme'), { recursive: true });
 cpSync('skills', join(folder,'skills'), { recursive: true });
 const zip = `${manifest.id}-${manifest.version}.zip`;
 execFileSync('zip', ['-qr', zip, manifest.id], { cwd: out });
